@@ -1,4 +1,5 @@
 import os
+import sqlite3
 import subprocess
 import datetime
 from playwright.sync_api import sync_playwright
@@ -56,7 +57,6 @@ def parse_int(s):
         return None
 
 def fmt_monto(val):
-    """Entero → string con puntos de miles. None → None."""
     if val is None:
         return None
     if val < 0:
@@ -93,15 +93,8 @@ def print_table(resultados):
     col_monto = max(15, max((len(r["monto"]) for r in resultados), default=0) + 2)
     W = col_inst + col_cat + col_item + 6 + col_monto + 14
 
-    def row(inst, cat_lbl, item, moneda, monto, is_total=False):
-        monto_disp = f"{monto:>{col_monto}}"
-        if is_total:
-            label = f"{inst}"
-            return f"  {label:{col_inst + col_cat + col_item + 6}}  {moneda:<6}  {monto_disp}"
-        return f"  {inst:{col_inst}}  {cat_lbl:{col_cat}}  {item:{col_item}}  {moneda:<6}  {monto_disp}"
-
-    sep  = "  " + "─" * (W - 2)
-    hdr  = row("Institución", "Categoría", "Item", "Moneda", "Monto")
+    sep = "  " + "─" * (W - 2)
+    hdr = f"  {'Institución':{col_inst}}  {'Categoría':{col_cat}}  {'Item':{col_item}}  {'Moneda':<6}  {'Monto':>{col_monto}}"
 
     print("\n" + "═" * W)
     print(" 💰  RESUMEN DE SALDOS".center(W))
@@ -109,53 +102,54 @@ def print_table(resultados):
     print(hdr)
     print(sep)
 
-    grand_total     = 0
-    grand_total_ok  = True
-
     for cat in CAT_ORDER:
         items = [r for r in resultados if r["cat"] == cat]
         if not items:
             continue
-        subtotal    = 0
-        subtotal_ok = True
-        cat_lbl     = CAT_LABELS[cat]
-
+        cat_lbl = CAT_LABELS[cat]
         for r in items:
-            if r["ok"]:
-                monto_disp = r["monto"]
-                subtotal += r["monto_int"]
-            else:
-                monto_disp = "No se pudo obtener"
-                subtotal_ok = False
-            print(row(r["inst"], cat_lbl, r["item"], r["moneda"], monto_disp))
+            monto_disp = r["monto"] if r["ok"] else "No se pudo obtener"
+            print(f"  {r['inst']:{col_inst}}  {cat_lbl:{col_cat}}  {r['item']:{col_item}}  {r['moneda']:<6}  {monto_disp:>{col_monto}}")
 
-        print(sep)
-        sub_label = f"Subtotal {cat_lbl}"
-        if subtotal_ok:
-            print(row(sub_label, "", "", "CLP", fmt_monto(subtotal), is_total=True))
-            grand_total += subtotal
-        else:
-            print(row(sub_label, "", "", "CLP", "(incompleto)", is_total=True))
-            grand_total_ok = False
-        print(sep)
-
-    total_str = fmt_monto(grand_total) if grand_total_ok else "(incompleto)"
-    print(row("TOTAL", "", "", "CLP", total_str, is_total=True))
     print("═" * W)
 
-def save_backup(resultados):
-    ts         = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M")
+
+# ══════════════════════════════════════════════════════════════
+# SQLITE STORAGE
+# ══════════════════════════════════════════════════════════════
+
+def init_db(db_path):
+    conn = sqlite3.connect(db_path)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS saldos (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp   TEXT    NOT NULL,
+            institucion TEXT    NOT NULL,
+            categoria   TEXT    NOT NULL,
+            item        TEXT    NOT NULL,
+            moneda      TEXT    NOT NULL,
+            monto       INTEGER,
+            ok          INTEGER NOT NULL DEFAULT 1
+        )
+    """)
+    conn.commit()
+    return conn
+
+def save_to_db(resultados):
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    backup_dir = os.path.join(script_dir, "backups")
-    os.makedirs(backup_dir, exist_ok=True)
-    path = os.path.join(backup_dir, f"{ts}.txt")
-    lines = [f"Saldos {ts}\n"]
-    for cat in CAT_ORDER:
-        for r in (x for x in resultados if x["cat"] == cat):
-            lines.append(f"{r['inst']}\t{CAT_LABELS.get(r['cat'], r['cat'])}\t{r['item']}\t{r['moneda']}\t{r['monto']}")
-    with open(path, "w") as f:
-        f.write("\n".join(lines))
-    print(f"\n💾 Backup guardado: backups/{ts}.txt")
+    db_path    = os.path.join(script_dir, "saldos.db")
+    ts         = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    conn       = init_db(db_path)
+    for r in resultados:
+        conn.execute(
+            "INSERT INTO saldos (timestamp, institucion, categoria, item, moneda, monto, ok) VALUES (?,?,?,?,?,?,?)",
+            (ts, r["inst"], CAT_LABELS.get(r["cat"], r["cat"]), r["item"], r["moneda"],
+             r["monto_int"], 1 if r["ok"] else 0)
+        )
+    conn.commit()
+    conn.close()
+    saved = sum(1 for r in resultados if r["ok"])
+    print(f"\n💾 Guardado en saldos.db — {saved} registros OK, timestamp: {ts}")
 
 
 # ══════════════════════════════════════════════════════════════
@@ -249,6 +243,12 @@ def scrape_banco_chile(context, resultados):
 
 
 def scrape_scotiabank_pn(context, resultados):
+    """
+    Nuevo portal: banco.scotiabank.cl (migrado desde scotiabankchile.cl)
+    Login: data-testid="inputDni" / "inputPassword" — igual que antes
+    CC saldo: iframe#iframe-stage → p.TextCaption__text--bold "Saldo disponible" → siguiente columna
+    TdC: mismo iframe con URL mfe-simple-account-statement-web-cl (por verificar)
+    """
     key = "scotiabank_pn"
     added = set()
     try:
@@ -264,35 +264,40 @@ def scrape_scotiabank_pn(context, resultados):
         page.get_by_test_id("inputPassword").fill(bw_get("password", "Scotiabank"))
         page.wait_for_timeout(1000)
         page.get_by_role("button", name="Ingresar").click()
-        # Esperar carga del dashboard, luego cerrar popup antes de leer saldo
-        page.wait_for_load_state("networkidle", timeout=20000)
+        page.wait_for_load_state("networkidle", timeout=25000)
         page.wait_for_timeout(1000)
-        try:
-            page.get_by_role("button", name="Cerrar", exact=True).wait_for(state="visible", timeout=5000)
-            page.get_by_role("button", name="Cerrar", exact=True).click()
-            page.wait_for_timeout(1000)
-        except:
-            pass
-        page.get_by_text("-$").first.wait_for(timeout=15000)
-        saldo = page.get_by_text("-$").first.text_content().strip().replace("$", "").strip()
+
+        # Navegar directamente a la página de saldos CC
+        page.goto("https://www.scotiabank.cl/mfe/sweb/mfe-shell-web-cl/mfe/mfe/ltmnsw/mfe-accounts-balancesmovements-web/?tab=saldos&type=CTACTE")
+        page.wait_for_timeout(4000)
+        frame = page.frame_locator("iframe#iframe-stage")
+        saldo_label = frame.locator("p.TextCaption__text--bold", has_text="Saldo disponible")
+        saldo_label.wait_for(state="visible", timeout=20000)
+        saldo_raw = saldo_label.locator(
+            "xpath=ancestor::div[contains(@class,'Column__container')]/following-sibling::div[1]/p"
+        ).text_content().strip()
+        saldo = saldo_raw.replace("$", "").strip()
         add_result(resultados, key, "Scotiabank", "CC PN", "CC 7002", saldo)
         print_preliminary("Scotiabank", "CC PN", "CC 7002", saldo)
         added.add("CC 7002")
+
         # TdC
         def get_cupo(card_number):
             url = f"https://www.scotiabank.cl/mfe/sweb/mfe-shell-web-cl/mfe/mfe-simple-account-statement-web-cl/?tab=saldo&card={card_number}"
             page.goto(url)
             page.wait_for_timeout(4000)
-            frame = page.frame_locator("iframe#iframe-stage")
-            cupo = frame.locator("div.saldo", has_text="Cupo utilizado").first
+            f = page.frame_locator("iframe#iframe-stage")
+            cupo = f.locator("div.saldo", has_text="Cupo utilizado").first
             cupo.wait_for(state="visible", timeout=15000)
             return cupo.locator("h1.saldo__text").text_content().strip()
+
         for card, item in [("3134", "TdC 3134"), ("2730", "TdC 2730")]:
             deuda = get_cupo(card).replace("$", "").strip()
             monto = f"-{deuda}" if deuda != "0" else "0"
             add_result(resultados, key, "Scotiabank", "TdC", item, monto)
             print_preliminary("Scotiabank", "TdC", item, monto)
             added.add(item)
+
         page.close()
         return True
     except Exception as e:
@@ -563,8 +568,8 @@ else:
         selected = list(ALL_BANKS)
 
 # Orden de ejecución: CAPTCHA primero, el resto mantiene orden alfabético
-captcha_first = [b for b in selected if b[2] in CAPTCHA_KEYS]
-rest          = [b for b in selected if b[2] not in CAPTCHA_KEYS]
+captcha_first   = [b for b in selected if b[2] in CAPTCHA_KEYS]
+rest            = [b for b in selected if b[2] not in CAPTCHA_KEYS]
 execution_order = captcha_first + rest
 
 print(f"\n→ Consultando: {', '.join(n for n,_,_ in execution_order)}\n")
@@ -607,7 +612,7 @@ with sync_playwright() as p:
     context.close()
     browser.close()
 
-# ── Paso 4: Output final (orden alfabético por institución) ───
+# ── Paso 4: Output final (orden por categoría, luego alfabético) ──
 resultados.sort(key=lambda r: (CAT_ORDER.index(r["cat"]) if r["cat"] in CAT_ORDER else 99, r["inst"]))
 print_table(resultados)
-save_backup(resultados)
+save_to_db(resultados)

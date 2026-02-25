@@ -84,10 +84,15 @@ def bw_get(field, item_name):  # field = "username" | "password"
 
 ## Selectores clave por banco
 
-### Scotiabank PN (`scotiabankchile.cl`)
-- RUT: `data-testid="inputDni"`
-- Password: `data-testid="inputPassword"`
-- CC saldo: `page.get_by_text("-$").first` (saldo en rojo = descubierto)
+### Scotiabank PN — NUEVO PORTAL (`banco.scotiabank.cl`, migrado ~Feb 2026)
+- Entrada: `scotiabankchile.cl` → "Acceso Scotia" → "Ingreso Personas"
+- RUT: `data-testid="inputDni"` (igual que antes)
+- Password: `data-testid="inputPassword"` (igual que antes)
+- Post-login: `wait_for_load_state("networkidle")` luego navegar directamente a URL de saldos
+- CC saldo URL: `https://www.scotiabank.cl/mfe/sweb/mfe-shell-web-cl/mfe/mfe/ltmnsw/mfe-accounts-balancesmovements-web/?tab=saldos&type=CTACTE`
+- CC saldo selector: `iframe#iframe-stage` → `frame.locator("p.TextCaption__text--bold", has_text="Saldo disponible").locator("xpath=ancestor::div[contains(@class,'Column__container')]/following-sibling::div[1]/p")`
+- TdC URL: `https://www.scotiabank.cl/mfe/sweb/mfe-shell-web-cl/mfe/mfe-simple-account-statement-web-cl/?tab=saldo&card={card_number}` (por verificar en nuevo portal)
+- TdC selector: `iframe#iframe-stage` → `div.saldo:has-text("Cupo utilizado") → h1.saldo__text` (por verificar)
 - **IMPORTANTE**: Agregar `add_init_script` webdriver spoofing NO es necesario aquí
 
 ### Santander (`mibanco.santander.cl`)
@@ -124,7 +129,7 @@ Columnas: `Institución | Categoría | Item | Moneda | Monto`
 - Monto **alineado a la derecha**, sin signo `$`
 - Negativo para deudas (TdC y CC en descubierto)
 - Subtotales por categoría
-- Backup automático en `backups/YYYY-MM-DD_HH-MM.txt`
+- Datos guardados en `saldos.db` (SQLite) — tabla `saldos` con columnas: id, timestamp, institucion, categoria, item, moneda, monto (INTEGER), ok
 
 ---
 
@@ -149,4 +154,5 @@ Columnas: `Institución | Categoría | Item | Moneda | Monto`
 ## Pendiente
 
 - Itaú CC PJ (en progreso — navegar a portal empresas Itaú)
-- Verificar Scotiabank PN (posible regresión)
+- Verificar TdC Scotiabank PN en nuevo portal (selectores por confirmar)
+- Verificar Santander (tiene issues, pausado)
