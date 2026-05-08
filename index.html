@@ -156,46 +156,198 @@ tr.rcg td{padding:7px 14px;border-bottom:1px solid #30363d;color:#8b949e;font-si
 .info-box{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:24px;color:#8b949e;font-size:13px}
 .view-hidden{display:none}
 
-/* ── MOBILE ── */
+/* ── MOBILE ELEMENTS (hidden on desktop) ── */
+.mob-hdr,.mob-nav{display:none}
+
+/* ── DESKTOP: hide mobile-only classes ── */
+.mob-only{display:none}
+
 @media(max-width:768px){
-  body{font-size:12px}
-  .hdr{padding:10px 14px;gap:8px;flex-wrap:wrap}
-  .logo{font-size:17px}
-  .rates{gap:5px;flex-wrap:wrap}
-  .rpill{padding:3px 7px}
-  .rl{font-size:9px}
-  .rv{font-size:12px}
-  /* ctrl bar: horizontal scroll, no wrap */
-  .ctrl{padding:7px 10px;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;flex-wrap:nowrap;scrollbar-width:none}
-  .ctrl::-webkit-scrollbar{display:none}
-  .tabs{flex-shrink:0}
-  .sep{display:none}
-  .dc{margin-left:0;flex-shrink:0}
-  select{max-width:110px;font-size:11px;padding:4px 6px}
-  .btn{padding:4px 8px;font-size:11px}
-  /* content */
-  .content{padding:10px 12px}
-  /* cards: 1 column */
-  .cards{grid-template-columns:1fr}
-  .cv-val{font-size:17px}
-  .cv-row{gap:6px}
-  /* tables: tighter padding + touch scroll */
-  .tw{-webkit-overflow-scrolling:touch}
-  td,thead th{padding:6px 8px;font-size:11px}
-  /* hide USD M and UF columns on narrow screens */
-  .mh{display:none}
-  /* caja: 1 column */
-  .caja-grid{grid-template-columns:1fr}
-  .caja-bar{grid-template-columns:repeat(2,1fr)}
-  .caja-metric .cm-val{font-size:13px}
-  /* comparar form: stack */
-  .comp-form{flex-direction:column;align-items:flex-start;gap:8px}
-  /* footer */
-  .foot{font-size:10px;padding:10px}
+  /* ── hide desktop chrome ── */
+  .hdr,.ctrl,.dbp,.foot{display:none!important}
+  body{padding-bottom:70px;font-size:13px}
+
+  /* ── MOBILE HEADER ── */
+  .mob-hdr{
+    display:flex;position:sticky;top:0;z-index:100;
+    background:#161b22;border-bottom:1px solid #30363d;
+    padding:12px 16px;align-items:center;gap:10px;
+  }
+  .mob-logo{font-size:20px;font-weight:800;letter-spacing:-.5px}
+  .mob-logo-c{color:#7c83fd}
+  .mob-rates{display:flex;gap:6px;flex:1;justify-content:center}
+  .mob-rpill{background:#21262d;border:1px solid #30363d;border-radius:20px;padding:4px 10px;display:flex;gap:4px;align-items:center}
+  .mob-rl{font-size:9px;color:#6e7681;text-transform:uppercase;letter-spacing:.4px}
+  .mob-rv{font-size:12px;font-weight:700;color:#e6edf3}
+  .mob-hbtn{width:36px;height:36px;border-radius:50%;background:#21262d;border:1px solid #30363d;color:#8b949e;font-size:17px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;-webkit-tap-highlight-color:transparent}
+  .mob-hbtn:active{background:#30363d}
+
+  /* ── BOTTOM NAV ── */
+  .mob-nav{
+    display:flex;position:fixed;bottom:0;left:0;right:0;
+    background:#161b22;border-top:1px solid #30363d;z-index:200;
+    padding-bottom:env(safe-area-inset-bottom,0px);
+  }
+  .mob-nb{
+    flex:1;display:flex;flex-direction:column;align-items:center;
+    padding:8px 4px 6px;cursor:pointer;color:#6e7681;font-size:10px;
+    font-weight:600;border:none;background:transparent;gap:3px;
+    font-family:inherit;-webkit-tap-highlight-color:transparent;letter-spacing:.3px;
+  }
+  .mob-nb.on{color:#7c83fd}
+  .mob-nb-icon{font-size:22px;line-height:1}
+  .mob-nb.on .mob-nb-icon{filter:drop-shadow(0 0 6px rgba(124,131,253,.5))}
+
+  /* ── CONTENT ── */
+  .content{padding:12px 14px;max-width:100%;margin:0}
+
+  /* ── HERO CARD ── */
+  .mob-hero{
+    background:linear-gradient(145deg,#1a1f2e 0%,#161b22 100%);
+    border:1px solid #30363d;border-radius:16px;padding:18px 18px 16px;
+    margin-bottom:12px;
+  }
+  .mob-hero-lbl{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#6e7681;margin-bottom:6px}
+  .mob-hero-num{font-size:36px;font-weight:800;letter-spacing:-1.5px;line-height:1;color:#3fb950}
+  .mob-hero-unit{font-size:14px;font-weight:500;opacity:.75;margin-left:3px}
+  .mob-hero-chips{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+  .mob-chip{border-radius:10px;padding:7px 12px;flex:1;min-width:80px}
+  .mob-chip-lbl{font-size:9px;text-transform:uppercase;letter-spacing:.5px;opacity:.8;margin-bottom:3px}
+  .mob-chip-val{font-size:15px;font-weight:700}
+  .mob-chip-u{font-size:10px;opacity:.7;margin-left:2px}
+
+  /* ── DATE BAR (mobile) ── */
+  .mob-datebar{display:flex;gap:8px;margin-bottom:12px;align-items:center}
+  .mob-datebar select{
+    flex:1;background:#21262d;border:1px solid #30363d;color:#e6edf3;
+    padding:9px 12px;border-radius:10px;font-size:13px;font-family:inherit;outline:none;
+  }
+  .mob-datebar select:focus{border-color:#7c83fd}
+
+  /* ── PERSONA PILLS ── */
+  .mob-persona{display:flex;gap:6px;margin-bottom:12px}
+  .mob-pbtn{
+    flex:1;padding:8px;border-radius:8px;border:1px solid #30363d;
+    background:#21262d;color:#8b949e;font-size:12px;font-family:inherit;
+    cursor:pointer;text-align:center;transition:all .15s;font-weight:500;
+  }
+  .mob-pbtn.on{border-color:#7c83fd;color:#7c83fd;background:rgba(124,131,253,.1)}
+
+  /* ── CATEGORY LIST ── */
+  .mob-catlist{display:flex;flex-direction:column;gap:8px}
+  .mob-catrow{background:#161b22;border:1px solid #30363d;border-radius:14px;overflow:hidden}
+  .mob-cathead{
+    display:flex;align-items:center;padding:14px 16px;gap:12px;
+    cursor:pointer;-webkit-tap-highlight-color:transparent;user-select:none;
+  }
+  .mob-cathead:active{background:#21262d}
+  .mob-cdot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+  .mob-catname{flex:1;font-weight:600;font-size:14px}
+  .mob-catnums{text-align:right;margin-right:6px}
+  .mob-catmm{font-size:17px;font-weight:700;line-height:1.2}
+  .mob-catpct{font-size:11px;color:#6e7681;margin-top:1px}
+  .mob-caret{color:#6e7681;font-size:12px;transition:transform .2s;flex-shrink:0}
+  .mob-caret.open{transform:rotate(90deg)}
+
+  /* ── CATEGORY ITEMS (expanded) ── */
+  .mob-items{display:none;border-top:1px solid #21262d}
+  .mob-items.open{display:block}
+  .mob-item{display:flex;align-items:center;padding:12px 16px;border-bottom:1px solid rgba(48,54,61,.35);gap:10px}
+  .mob-item:last-child{border-bottom:none}
+  .mob-item-info{flex:1;min-width:0}
+  .mob-item-top{display:flex;align-items:center;gap:6px}
+  .mob-item-inst{font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .mob-item-sub{font-size:11px;color:#6e7681;margin-top:2px}
+  .mob-item-right{text-align:right;flex-shrink:0}
+  .mob-item-clp{font-size:15px;font-weight:700}
+  .mob-item-ts{font-size:10px;color:#6e7681;margin-top:2px}
+  .mob-bdg{font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px}
+
+  /* ── TOTAL ROW (at bottom of catlist) ── */
+  .mob-totals{display:flex;gap:8px;margin-top:10px}
+  .mob-total-card{flex:1;border-radius:12px;padding:12px 14px}
+  .mob-total-lbl{font-size:9px;text-transform:uppercase;letter-spacing:.6px;opacity:.8;margin-bottom:4px}
+  .mob-total-num{font-size:18px;font-weight:800;letter-spacing:-.5px}
+  .mob-total-u{font-size:10px;opacity:.7;margin-left:2px}
+
+  /* ── CAJA MOBILE ── */
+  .mob-subtabs{display:flex;gap:0;background:#21262d;border-radius:10px;padding:3px;margin-bottom:12px}
+  .mob-stab{flex:1;padding:8px 4px;border-radius:8px;border:none;background:transparent;color:#8b949e;cursor:pointer;font-size:11px;font-weight:600;font-family:inherit;text-align:center;transition:all .15s}
+  .mob-stab.on{background:#7c83fd;color:#fff}
+  .mob-metrics{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}
+  .mob-metric{background:#161b22;border:1px solid #30363d;border-radius:12px;padding:12px 14px}
+  .mob-metric-lbl{font-size:9px;text-transform:uppercase;letter-spacing:.5px;color:#6e7681;margin-bottom:4px}
+  .mob-metric-val{font-size:16px;font-weight:700}
+  .mob-sec-title{font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:#8b949e;font-weight:700;padding:4px 0 8px}
+  .mob-list{background:#161b22;border:1px solid #30363d;border-radius:12px;overflow:hidden;margin-bottom:12px}
+  .mob-lrow{display:flex;align-items:center;padding:12px 14px;border-bottom:1px solid rgba(48,54,61,.35);gap:10px}
+  .mob-lrow:last-child{border-bottom:none}
+  .mob-lrow-info{flex:1}
+  .mob-lrow-name{font-size:13px;font-weight:500}
+  .mob-lrow-sub{font-size:11px;color:#6e7681;margin-top:2px}
+  .mob-lrow-right{text-align:right}
+  .mob-lrow-amt{font-size:15px;font-weight:700}
+  .mob-lrow-ts{font-size:10px;color:#6e7681;margin-top:2px}
+  .mob-lrow-subtotal{background:rgba(30,36,43,.8);font-weight:700}
+  .mob-lrow-subtotal .mob-lrow-name{font-size:12px}
+
+  /* ── CUPOS MOBILE ── */
+  .mob-cupo{background:#161b22;border:1px solid #30363d;border-radius:12px;padding:14px;margin-bottom:8px}
+  .mob-cupo-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px}
+  .mob-cupo-inst{font-size:14px;font-weight:600}
+  .mob-cupo-tdc{font-size:11px;color:#6e7681;margin-top:2px}
+  .mob-cupo-deuda{font-size:18px;font-weight:700;color:#f85149}
+  .mob-cupo-bar-bg{height:6px;background:#21262d;border-radius:3px;overflow:hidden;margin-bottom:8px}
+  .mob-cupo-bar-fill{height:100%;border-radius:3px}
+  .mob-cupo-footer{display:flex;justify-content:space-between;font-size:11px;color:#6e7681}
+  .mob-cupo-footer span:last-child{font-weight:600}
+
+  /* ── PAGOS MOBILE ── */
+  .mob-pago-section-hdr{font-size:10px;text-transform:uppercase;letter-spacing:.7px;font-weight:700;padding:6px 0 8px}
+  .mob-pago{background:#161b22;border:1px solid #30363d;border-radius:12px;padding:14px;margin-bottom:8px}
+  .mob-pago-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px}
+  .mob-pago-left .mob-pago-inst{font-size:13px;font-weight:600}
+  .mob-pago-left .mob-pago-card{font-size:11px;color:#6e7681;margin-top:2px}
+  .mob-pago-delta{font-size:20px;font-weight:800}
+  .mob-pago-rows{border-top:1px solid #30363d;padding-top:8px;display:grid;grid-template-columns:1fr 1fr;gap:4px 10px}
+  .mob-pago-field{font-size:11px}
+  .mob-pago-field-lbl{color:#6e7681}
+  .mob-pago-field-val{font-weight:500;color:#e6edf3}
+  .mob-pago-until{font-size:11px;color:#8b949e;margin-top:6px;text-align:right}
+
+  /* ── COMPARAR MOBILE ── */
+  .mob-comp-form{background:#161b22;border:1px solid #30363d;border-radius:14px;padding:14px;margin-bottom:12px}
+  .mob-comp-lbl{font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:#6e7681;margin-bottom:6px}
+  .mob-comp-sel{width:100%;background:#21262d;border:1px solid #30363d;color:#e6edf3;padding:9px 12px;border-radius:8px;font-size:13px;font-family:inherit;outline:none;margin-bottom:10px}
+  .mob-comp-actions{display:flex;gap:6px}
+  .mob-comp-go{flex:2;padding:10px;border-radius:8px;background:#7c83fd;border:none;color:#fff;font-size:13px;font-family:inherit;font-weight:600;cursor:pointer}
+  .mob-comp-go:active{background:#6570e8}
+  .mob-comp-quick{flex:1;padding:10px 6px;border-radius:8px;border:1px solid #30363d;background:#21262d;color:#8b949e;font-size:11px;font-family:inherit;cursor:pointer;text-align:center}
+  .mob-comp-unit{display:flex;background:#21262d;border-radius:10px;padding:3px;margin-bottom:12px}
+  .mob-comp-unit button{flex:1;padding:8px;border:none;background:transparent;color:#8b949e;border-radius:8px;font-size:12px;font-family:inherit;cursor:pointer;font-weight:500}
+  .mob-comp-unit button.on{background:#30363d;color:#e6edf3;font-weight:700}
+  .mob-comp-info{text-align:center;font-size:11px;color:#8b949e;margin-bottom:10px;padding:8px 12px;background:#161b22;border:1px solid #30363d;border-radius:10px}
+  .mob-comp-card{background:#161b22;border:1px solid #30363d;border-radius:12px;padding:12px 14px;margin-bottom:8px}
+  .mob-comp-card.is-patri{border-color:#f0883e;background:rgba(240,136,62,.05)}
+  .mob-comp-card.is-total{border-color:#3fb950;background:rgba(63,185,80,.05)}
+  .mob-comp-catname{font-size:11px;color:#8b949e;font-weight:600;text-transform:uppercase;letter-spacing:.3px;margin-bottom:8px}
+  .mob-comp-card.is-patri .mob-comp-catname{color:#f0883e}
+  .mob-comp-card.is-total .mob-comp-catname{color:#3fb950}
+  .mob-comp-vals{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px}
+  .mob-comp-val{background:#21262d;border-radius:8px;padding:8px 6px;text-align:center}
+  .mob-comp-val-lbl{font-size:8px;color:#6e7681;text-transform:uppercase;letter-spacing:.3px;margin-bottom:3px}
+  .mob-comp-val-num{font-size:12px;font-weight:700}
 }
 </style>
 </head>
 <body>
+
+<!-- ── MOBILE HEADER ── -->
+<div id="mobHdr" class="mob-hdr">
+  <div class="mob-logo"><span class="mob-logo-c">Chira</span>Fin</div>
+  <div class="mob-rates" id="mobRates"><span style="color:#6e7681;font-size:12px">Cargando…</span></div>
+  <button class="mob-hbtn" onclick="refresh()">↻</button>
+</div>
 
 <div class="hdr">
   <div class="logo"><span class="logo-c">Chira</span><span class="logo-f">Fin</span></div>
@@ -253,6 +405,19 @@ tr.rcg td{padding:7px 14px;border-bottom:1px solid #30363d;color:#8b949e;font-si
   </div>
 
   <div class="foot"><span class="dlive"></span>ChiraFin · Datos live desde Supabase</div>
+</div>
+
+<!-- ── MOBILE BOTTOM NAV ── -->
+<div class="mob-nav">
+  <button class="mob-nb on" id="mnb0" onclick="mobNav('summary')">
+    <span class="mob-nb-icon">📊</span>Patrimonio
+  </button>
+  <button class="mob-nb" id="mnb1" onclick="mobNav('caja')">
+    <span class="mob-nb-icon">💰</span>Caja
+  </button>
+  <button class="mob-nb" id="mnb2" onclick="mobNav('comparar')">
+    <span class="mob-nb-icon">📅</span>Comparar
+  </button>
 </div>
 
 <script>
@@ -1554,6 +1719,474 @@ async function init(){
     renderCurrent();
   }catch(e){showErr(e.message);console.error(e)}
 }
+
+// ─────────────────────────────────────────
+// MOBILE UTILS
+// ─────────────────────────────────────────
+function isMob(){ return window.innerWidth <= 768; }
+
+function mobRatesHtml(){
+  const r=S.rates;
+  if(!r) return '<span style="color:#6e7681;font-size:12px">Cargando…</span>';
+  return `<div class="mob-rpill"><span class="mob-rl">USD</span><span class="mob-rv"> $${fi(r.usd)}</span></div>`+
+         `<div class="mob-rpill"><span class="mob-rl">UF</span><span class="mob-rv"> $${fi(r.uf)}</span></div>`;
+}
+
+function mobNav(view){
+  const prev=S.mainView;
+  // Map view to canonical state
+  if(view==='summary') { S.mainView='summary'; S.subPat='summary'; }
+  else if(view==='caja') { S.mainView='caja'; }
+  else if(view==='comparar') { S.mainView='comparar'; }
+  // Update bottom nav active state
+  const ids=['summary','caja','comparar'];
+  ids.forEach((v,i)=>{ const b=document.getElementById('mnb'+i); if(b) b.classList.toggle('on',view===v); });
+  renderCurrent();
+}
+
+function mobUpdateNav(){
+  const v=S.mainView;
+  const key = ['summary','detail'].includes(v)?'summary': v==='caja'?'caja':'comparar';
+  ['summary','caja','comparar'].forEach((k,i)=>{
+    const b=document.getElementById('mnb'+i);
+    if(b) b.classList.toggle('on',key===k);
+  });
+}
+
+function mobXp(rid){
+  const items=document.getElementById('mitems-'+rid);
+  const caret=document.getElementById('mcar-'+rid);
+  if(!items||!caret) return;
+  const open=items.classList.toggle('open');
+  caret.classList.toggle('open',open);
+}
+
+// ─────────────────────────────────────────
+// MOBILE: PATRIMONIO
+// ─────────────────────────────────────────
+function renderSummaryMob(){
+  if(!S.rates){ showLoad(); return; }
+  const rows=processRows(S.raw);
+  const T=aggregate(rows);
+  const {g,catClp,invClp,totClp}=T;
+  const r=S.rates;
+
+  // Update mobile rates bar
+  document.getElementById('mobRates').innerHTML=mobRatesHtml();
+
+  // Date bar (clone options from desktop select)
+  const dsel=document.getElementById('dsel');
+  const dOpts=dsel?dsel.innerHTML:'<option value="actual">▶ Actual</option>';
+  let h=`<div class="mob-datebar"><select onchange="onDate(this.value)">${dOpts}</select></div>`;
+
+  // Persona pills
+  h+=`<div class="mob-persona">
+    <button class="mob-pbtn ${S.persona==='todos'?'on':''}" onclick="setP('todos')">Todos</button>
+    <button class="mob-pbtn ${S.persona==='PN'?'on':''}" onclick="setP('PN')">PN</button>
+    <button class="mob-pbtn ${S.persona==='PJ'?'on':''}" onclick="setP('PJ')">PJ</button>
+  </div>`;
+
+  // Hero card
+  const totMM=fi(Math.round(totClp/1e6));
+  const invMM=fi(Math.round(invClp/1e6));
+  const totUSD=fi(Math.round(totClp/(r.usd||1)/1e3));
+  const totUF=fi(Math.round(totClp/(r.uf||1)));
+  h+=`<div class="mob-hero">
+    <div class="mob-hero-lbl">Total General</div>
+    <div><span class="mob-hero-num">${totMM}</span><span class="mob-hero-unit">MM CLP</span></div>
+    <div class="mob-hero-chips">
+      <div class="mob-chip" style="background:rgba(240,136,62,.1);border:1px solid rgba(240,136,62,.2)">
+        <div class="mob-chip-lbl" style="color:#f0883e">Patrimonio Inv.</div>
+        <div class="mob-chip-val" style="color:#f0883e">${invMM}<span class="mob-chip-u" style="color:#f0883e">MM</span></div>
+      </div>
+      <div class="mob-chip" style="background:rgba(63,185,80,.1);border:1px solid rgba(63,185,80,.2)">
+        <div class="mob-chip-lbl" style="color:#3fb950">USD</div>
+        <div class="mob-chip-val" style="color:#3fb950">${totUSD}<span class="mob-chip-u" style="color:#3fb950">M</span></div>
+      </div>
+      <div class="mob-chip" style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.2)">
+        <div class="mob-chip-lbl" style="color:#58a6ff">UF</div>
+        <div class="mob-chip-val" style="color:#58a6ff">${totUF}</div>
+      </div>
+    </div>
+  </div>`;
+
+  // Category list
+  h+=`<div class="mob-catlist">`;
+  CATS.forEach((cat,idx)=>{
+    const clp=catClp[cat], items=g[cat];
+    if(!items||items.length===0) return;
+    const color=COLORS[cat]||'#666';
+    const neg=clp<0;
+    const rid='mc'+idx;
+    const pct=fPct(clp,totClp);
+    h+=`<div class="mob-catrow">
+      <div class="mob-cathead" onclick="mobXp('${rid}')">
+        <span class="mob-cdot" style="background:${color}"></span>
+        <span class="mob-catname">${cat}</span>
+        <div class="mob-catnums">
+          <div class="mob-catmm ${neg?'vn':'vp'}">${fCLP(clp)}<span style="font-size:11px;font-weight:400;opacity:.7"> MM</span></div>
+          <div class="mob-catpct">${pct}</div>
+        </div>
+        <span class="mob-caret" id="mcar-${rid}">▶</span>
+      </div>
+      <div class="mob-items" id="mitems-${rid}">`;
+    [...items].sort((a,b)=>Math.abs(b.clp)-Math.abs(a.clp)).forEach(it=>{
+      const ineg=it.clp<0;
+      h+=`<div class="mob-item">
+        <div class="mob-item-info">
+          <div class="mob-item-top">
+            <span class="mob-item-inst">${it.institucion||'—'}</span>
+            <span class="mob-bdg b${(it.persona||'pn').toLowerCase()}">${it.persona||''}</span>
+          </div>
+          <div class="mob-item-sub">${it.item||'—'} · ${it.moneda}</div>
+        </div>
+        <div class="mob-item-right">
+          <div class="mob-item-clp ${ineg?'vn':'vp'}">${fCLP(it.clp)} MM</div>
+          <div class="mob-item-ts">${fmtTs(tsOf(it))}</div>
+        </div>
+      </div>`;
+    });
+    h+=`</div></div>`;
+  });
+  h+=`</div>`;
+
+  document.getElementById('tw').innerHTML=h;
+  setTimeout(()=>{ const s=document.querySelector('.mob-datebar select'); if(s) s.value=S.date; },0);
+}
+
+// ─────────────────────────────────────────
+// MOBILE: CAJA
+// ─────────────────────────────────────────
+function renderCajaMob(){
+  if(!S.rates){ showLoad(); return; }
+  const rows=processRows(S.raw,'todos');
+  const usd=S.rates.usd, uf=S.rates.uf;
+  const activos=[], pasivos=[];
+  let totalActivos=0, totalPasivos=0;
+  rows.forEach(r=>{
+    const is_cash=r.cat==='Cash';
+    const inst=r.institucion||'', item=r.item||'', pers=r.persona||'';
+    const stKey=inst+'|'+item;
+    const is_short=SHORT_TERM_INV.has(stKey)||((inst==='Itaú'||inst==='Itaú PJ')&&item==='CFIETFCD'&&pers==='PJ');
+    const isTdc=item.includes('TdC')||(r.categoria||'').includes('TdC');
+    const isLdc=item.includes('LdC')||(r.categoria||'').includes('LdC');
+    const clp=r.clp;
+    if((is_cash||is_short)&&clp>0){ activos.push(r); totalActivos+=clp; }
+    else if((isTdc||isLdc)&&clp<0){ pasivos.push(r); totalPasivos+=clp; }
+  });
+  activos.sort((a,b)=>b.clp-a.clp);
+  pasivos.sort((a,b)=>a.clp-b.clp);
+  const cfg=S.config;
+  const safety_cash=cfg.safety_cash, prov_inv=cfg.prov_inversion, tol=cfg.tolerance;
+  const total_provisiones=safety_cash+prov_inv;
+  const liq_bruta=totalActivos+totalPasivos;
+  const total_pasivos_calc=totalPasivos+total_provisiones;
+  const liq_neta=totalActivos+total_pasivos_calc;
+  const abs_p=Math.abs(total_pasivos_calc);
+  const ratio=abs_p!==0?(liq_neta/abs_p)*100:0;
+  const dispo_neto=liq_neta-(tol/100)*abs_p;
+  function fc(v){ const neg=v<0; return `<span class="${neg?'vn':'vp'}">${neg?'-':''}${fi(Math.abs(v))}</span>`; }
+
+  const subtabs=`<div class="mob-subtabs">
+    <button class="mob-stab ${S.subCaja==='activos'?'on':''}" onclick="setSubCaja('activos')">Activos/Pasivos</button>
+    <button class="mob-stab ${S.subCaja==='cupos'?'on':''}" onclick="setSubCaja('cupos')">Cupos TdC</button>
+    <button class="mob-stab ${S.subCaja==='pagos'?'on':''}" onclick="setSubCaja('pagos')">Pagos TdC</button>
+  </div>`;
+
+  const lbC=liq_bruta>=0?'vp':'vn', lnC=liq_neta>=0?'vp':'vn', dnC=dispo_neto>=0?'vp':'vn';
+  const ratio_str=(ratio>=0?'+':'')+ratio.toFixed(1).replace('.',',')+' %';
+
+  let h=subtabs;
+  h+=`<div class="mob-metrics">
+    <div class="mob-metric"><div class="mob-metric-lbl">Liquidez Bruta</div><div class="mob-metric-val ${lbC}">${liq_bruta<0?'-':''}${fi(Math.abs(liq_bruta))}</div></div>
+    <div class="mob-metric"><div class="mob-metric-lbl" style="color:#7c83fd">Liquidez Neta</div><div class="mob-metric-val ${lnC}">${liq_neta<0?'-':''}${fi(Math.abs(liq_neta))}</div></div>
+    <div class="mob-metric"><div class="mob-metric-lbl" style="color:#7c83fd">Ratio Neto</div><div class="mob-metric-val ${lnC}">${ratio_str}</div></div>
+    <div class="mob-metric"><div class="mob-metric-lbl">Disponible (tol.${tol}%)</div><div class="mob-metric-val ${dnC}">${dispo_neto<0?'-':''}${fi(Math.abs(dispo_neto))}</div></div>
+  </div>`;
+
+  h+=`<div class="mob-sec-title" style="color:#3fb950">Activos Corto Plazo</div><div class="mob-list">`;
+  activos.forEach(r=>{ h+=`<div class="mob-lrow"><div class="mob-lrow-info"><div class="mob-lrow-name">${r.institucion||'—'}</div><div class="mob-lrow-sub">${r.item||''} · ${r.persona||''}</div></div><div class="mob-lrow-right"><div class="mob-lrow-amt vp">${fi(r.clp)}</div><div class="mob-lrow-ts">${fmtTs(tsOf(r))}</div></div></div>`; });
+  h+=`<div class="mob-lrow mob-lrow-subtotal"><div class="mob-lrow-info"><div class="mob-lrow-name" style="color:#3fb950">Subtotal</div></div><div class="mob-lrow-right"><div class="mob-lrow-amt vp">${fi(totalActivos)}</div></div></div></div>`;
+
+  h+=`<div class="mob-sec-title" style="color:#f85149">Obligaciones Corto Plazo</div><div class="mob-list">`;
+  pasivos.forEach(r=>{ h+=`<div class="mob-lrow"><div class="mob-lrow-info"><div class="mob-lrow-name">${r.institucion||'—'}</div><div class="mob-lrow-sub">${r.item||''} · ${r.persona||''}</div></div><div class="mob-lrow-right"><div class="mob-lrow-amt vn">${fi(Math.abs(r.clp))}</div><div class="mob-lrow-ts">${fmtTs(tsOf(r))}</div></div></div>`; });
+  if(safety_cash!==0) h+=`<div class="mob-lrow"><div class="mob-lrow-info"><div class="mob-lrow-name">Safety Cash</div><div class="mob-lrow-sub">Reserva</div></div><div class="mob-lrow-right"><div class="mob-lrow-amt vw">${fi(Math.abs(safety_cash))}</div></div></div>`;
+  if(prov_inv!==0) h+=`<div class="mob-lrow"><div class="mob-lrow-info"><div class="mob-lrow-name">Provisión</div><div class="mob-lrow-sub">Reserva</div></div><div class="mob-lrow-right"><div class="mob-lrow-amt vw">${fi(Math.abs(prov_inv))}</div></div></div>`;
+  h+=`<div class="mob-lrow mob-lrow-subtotal"><div class="mob-lrow-info"><div class="mob-lrow-name" style="color:#f85149">Subtotal</div></div><div class="mob-lrow-right"><div class="mob-lrow-amt vn">${fi(Math.abs(total_pasivos_calc))}</div></div></div></div>`;
+
+  document.getElementById('tw').innerHTML=h;
+}
+
+// ─────────────────────────────────────────
+// MOBILE: CUPOS TdC
+// ─────────────────────────────────────────
+function renderCuposMob(){
+  const rows=processRows(S.raw,'todos');
+  const tdc=rows.filter(r=>(r.item||'').includes('TdC')||(r.categoria||'').includes('TdC'));
+  tdc.sort((a,b)=>Math.abs(b.clp)-Math.abs(a.clp));
+  const subtabs=`<div class="mob-subtabs">
+    <button class="mob-stab" onclick="setSubCaja('activos')">Activos/Pasivos</button>
+    <button class="mob-stab on" onclick="setSubCaja('cupos')">Cupos TdC</button>
+    <button class="mob-stab" onclick="setSubCaja('pagos')">Pagos TdC</button>
+  </div>`;
+  let h=subtabs;
+  tdc.forEach(r=>{
+    const key=r.institucion+'|'+r.item;
+    const deuda=Math.abs(r.clp);
+    const cupo=+(S.cupos[key]||0);
+    const disp=cupo-deuda;
+    const pct=cupo>0?(disp/cupo*100):0;
+    const fillPct=cupo>0?Math.min(Math.abs(deuda/cupo)*100,100):0;
+    const dc=disp>0?'vp':disp<0?'vn':'vw';
+    const barColor=pct>30?'#3fb950':pct>10?'#d29922':'#f85149';
+    h+=`<div class="mob-cupo">
+      <div class="mob-cupo-top">
+        <div><div class="mob-cupo-inst">${r.institucion||'—'}</div><div class="mob-cupo-tdc">${r.item||'—'}</div></div>
+        <div><div class="mob-cupo-deuda">${deuda>0?fi(deuda):'—'}</div><div style="font-size:10px;color:#6e7681;text-align:right">deuda CLP</div></div>
+      </div>
+      <div class="mob-cupo-bar-bg"><div class="mob-cupo-bar-fill" style="width:${fillPct}%;background:${barColor}"></div></div>
+      <div class="mob-cupo-footer">
+        <span>Disponible: <span class="${dc}">${cupo>0?(disp>=0?'':'-')+fi(Math.abs(disp)):'—'}</span></span>
+        <span>Cupo total: ${cupo>0?fi(cupo):'—'}</span>
+        <span class="${dc}">${cupo>0?Math.round(pct)+'% libre':'—'}</span>
+      </div>
+    </div>`;
+  });
+  document.getElementById('tw').innerHTML=h||subtabs+'<div class="mob-sec-title">Sin tarjetas detectadas</div>';
+}
+
+// ─────────────────────────────────────────
+// MOBILE: PAGOS TdC
+// ─────────────────────────────────────────
+async function renderPagosMob(){
+  const subtabs=`<div class="mob-subtabs">
+    <button class="mob-stab" onclick="setSubCaja('activos')">Activos/Pasivos</button>
+    <button class="mob-stab" onclick="setSubCaja('cupos')">Cupos TdC</button>
+    <button class="mob-stab on" onclick="setSubCaja('pagos')">Pagos TdC</button>
+  </div>`;
+  if(S.pagos===null){
+    document.getElementById('tw').innerHTML=subtabs+`<div class="sb"><div class="spin"></div><div>Cargando pagos…</div></div>`;
+    try{ S.pagos=await getPagos(); } catch(e){ document.getElementById('tw').innerHTML=subtabs+`<div class="mob-sec-title">No se pudo cargar pagos TdC</div>`; return; }
+  }
+  const rows=S.pagos||[];
+  const MESES=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  function fdate(s){ if(!s) return '—'; try{ const d=new Date(s.replace(/(\d{2})\/(\d{2})\/(\d{4})/,'$3-$2-$1')); return `${String(d.getDate()).padStart(2,'0')}-${MESES[d.getMonth()]}`; }catch(e){return s.slice(0,8)||'—'} }
+  function fc2(n){ if(!n||n===0) return '—'; return fi(Math.round(+n)); }
+  const latest={};
+  rows.forEach(r=>{ const k=(r.institucion||'')+'|'+(r.card_number||''); if(!latest[k]||r.timestamp>latest[k].timestamp) latest[k]=r; });
+  const data=Object.values(latest);
+  const pendientes=[], al_dia=[];
+  data.forEach(r=>{
+    const paid_clp=r.pagado_clp!=null?+r.pagado_clp:(+r.no_facturado_clp||0);
+    const delta_clp=(+(r.facturado_clp||0))-paid_clp;
+    const delta_usd=(+(r.facturado_usd||0))-(+(r.pagado_usd||0));
+    const entry={...r, paid_clp, delta_clp, delta_usd};
+    if(delta_clp>0||delta_usd>0) pendientes.push(entry); else al_dia.push(entry);
+  });
+  pendientes.sort((a,b)=>(a.pagar_hasta||'').localeCompare(b.pagar_hasta||''));
+  al_dia.sort((a,b)=>(a.pagar_hasta||'').localeCompare(b.pagar_hasta||''));
+  function makeCards(list, color, title){
+    if(!list.length) return '';
+    let s=`<div class="mob-pago-section-hdr" style="color:${color}">${title}</div>`;
+    list.forEach(r=>{
+      const cc=r.delta_clp>0?'vn':'vp';
+      s+=`<div class="mob-pago">
+        <div class="mob-pago-top">
+          <div class="mob-pago-left">
+            <div class="mob-pago-inst">${r.institucion||'—'}</div>
+            <div class="mob-pago-card">${(r.card_name||'Visa')+' ****'+r.card_number}</div>
+          </div>
+          <div><div class="mob-pago-delta ${cc}">${r.delta_clp>0?fi(r.delta_clp):r.delta_usd>0?'USD '+r.delta_usd.toFixed(2):'✓'}</div></div>
+        </div>
+        <div class="mob-pago-rows">
+          <div class="mob-pago-field"><div class="mob-pago-field-lbl">Facturado</div><div class="mob-pago-field-val">${fc2(r.facturado_clp)}</div></div>
+          <div class="mob-pago-field"><div class="mob-pago-field-lbl">Pagado</div><div class="mob-pago-field-val">${fc2(r.paid_clp)}</div></div>
+          <div class="mob-pago-field"><div class="mob-pago-field-lbl">Período</div><div class="mob-pago-field-val">${fdate(r.periodo_hasta)}</div></div>
+          <div class="mob-pago-field"><div class="mob-pago-field-lbl">Pagar hasta</div><div class="mob-pago-field-val" style="color:${r.delta_clp>0?'#f85149':'#8b949e'}">${fdate(r.pagar_hasta)}</div></div>
+        </div>
+      </div>`;
+    });
+    return s;
+  }
+  document.getElementById('tw').innerHTML=subtabs+makeCards(pendientes,'#f85149','Pendientes')+makeCards(al_dia,'#3fb950','Al Día');
+}
+
+// ─────────────────────────────────────────
+// MOBILE: COMPARAR
+// ─────────────────────────────────────────
+function renderCompararMob(){
+  if(!window._allDates||window._allDates.length<2){
+    document.getElementById('tw').innerHTML=`<div class="sb"><div class="spin"></div><div>Cargando fechas…</div></div>`;
+    getDates().then(ds=>{ window._allDates=ds.map(d=>d.fecha).sort((a,b)=>b.localeCompare(a)); renderCompararMob(); }).catch(()=>{ document.getElementById('tw').innerHTML=`<div class="mob-sec-title">Sin datos históricos</div>`; });
+    return;
+  }
+  const comp=S.comp;
+  const dOpts=window._allDates.map(d=>`<option value="${d}">${d}</option>`).join('');
+  let h=`<div class="mob-comp-form">
+    <div class="mob-comp-lbl">Fecha Base</div>
+    <select id="mcompA" class="mob-comp-sel">${dOpts}</select>
+    <div class="mob-comp-lbl">Fecha Comparar</div>
+    <select id="mcompB" class="mob-comp-sel">${dOpts}</select>
+    <div class="mob-comp-actions">
+      <button class="mob-comp-go" onclick="runCompararMob()">Comparar →</button>
+      <button class="mob-comp-quick" onclick="compQuick('prev')">vs Anterior</button>
+      <button class="mob-comp-quick" onclick="compQuick('oldest')">vs Más Antigua</button>
+    </div>
+  </div>`;
+
+  h+=`<div class="mob-comp-unit">
+    <button class="${S.compUnit==='clp'?'on':''}" onclick="setCompUnit('clp')">CLP MM</button>
+    <button class="${S.compUnit==='usd'?'on':''}" onclick="setCompUnit('usd')">USD M</button>
+    <button class="${S.compUnit==='uf'?'on':''}" onclick="setCompUnit('uf')">UF</button>
+  </div>`;
+
+  document.getElementById('tw').innerHTML=h;
+  setTimeout(()=>{
+    const a=document.getElementById('mcompA'), b=document.getElementById('mcompB');
+    if(a&&window._allDates.length>1) a.value=comp.dateA||window._allDates[1];
+    if(b&&window._allDates.length>0) b.value=comp.dateB||window._allDates[0];
+  },0);
+
+  if(!comp.snapA||!comp.snapB) return;
+
+  // Build results
+  const {snapA,snapB,dateA,dateB}=comp;
+  const rToday=S.rates;
+  const catKeys=new Set(S.raw.filter(r=>r.source!=='historial').map(r=>(r.institucion||'')+'|'+(r.item||'')+'|'+(r.persona||'')));
+  const currentCatMap={};
+  S.raw.filter(r=>r.source!=='historial').forEach(r=>{ const k=(r.institucion||'')+'|'+(r.item||'')+'|'+(r.persona||''); if(!currentCatMap[k]) currentCatMap[k]=r.categoria; });
+  function filterSnap2(snap){ return snap.filter(r=>catKeys.has((r.institucion||'')+'|'+(r.item||'')+'|'+(r.persona||''))); }
+  function buildCatData2(snap){
+    const filtered=filterSnap2(snap).map(r=>{ const k=(r.institucion||'')+'|'+(r.item||'')+'|'+(r.persona||''); const cc=currentCatMap[k]; return cc?{...r,categoria:cc}:r; });
+    return aggregate(processRows(filtered,'todos',rToday,true));
+  }
+  const TA=buildCatData2(snapA), TB=buildCatData2(snapB);
+  const dtA=new Date(dateA), dtB=new Date(dateB);
+  const days=Math.max(1,(dtB-dtA)/864e5), months=Math.max(1/30.44,days/30.44);
+  function lbl2(d){ const dt=new Date(d); const m=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'][dt.getUTCMonth()]; return `${String(dt.getUTCDate()).padStart(2,'0')} ${m} ${dt.getUTCFullYear()}`; }
+
+  const unit=S.compUnit;
+  function scale(clp){ if(unit==='usd') return clp/(rToday?.usd||1)/1e3; if(unit==='uf') return clp/(rToday?.uf||1); return clp/1e6; }
+  function fv2(v){ if(!v&&v!==0) return '<span class="dim">—</span>'; const r2=Math.round(unit==='clp'?v:v*10)/10; return `<span>${fi(r2)}</span>`; }
+  function fdMob(v){ if(Math.abs(v)<1e-9) return '<span class="dim">0</span>'; const col=v>0?'#3fb950':v<0?'#f85149':'#6e7681'; const s=v>=0?'+':''; const fmtv=unit==='clp'?fi(Math.round(v)):fi(Math.round(v*10)/10); return `<span style="color:${col};font-weight:700">${s}${fmtv}</span>`; }
+  function fdPctMob(v){ if(v===null||isNaN(v)) return '<span class="dim">—</span>'; const col=v>0?'#3fb950':v<0?'#f85149':'#6e7681'; return `<span style="color:${col};font-weight:700">${v>=0?'+':''}${v.toFixed(1).replace('.',',')}%</span>`; }
+
+  let patA=0, patB=0, totA=0, totB=0;
+  CATS.forEach(cat=>{ const va=scale(TA.catClp[cat]||0), vb=scale(TB.catClp[cat]||0); totA+=va; totB+=vb; if(cat!=='Casa'){ patA+=va; patB+=vb; } });
+
+  let resultsHtml=`<div class="mob-comp-info">
+    <strong style="color:#e6edf3">${lbl2(dateA)}</strong> → <strong style="color:#e6edf3">${lbl2(dateB)}</strong>
+    &nbsp;·&nbsp; ${days<31?days+' días':Math.round(months)+' meses'}
+  </div>`;
+
+  // TOTAL PATRIMONIO card
+  const dp=patB-patA, dpp=patA!==0?dp/Math.abs(patA)*100:null, dAnualPat=patA!==0?(dp/days*365)/Math.abs(patA)*100:null;
+  resultsHtml+=`<div class="mob-comp-card is-patri">
+    <div class="mob-comp-catname">Total Patrimonio Inv.</div>
+    <div class="mob-comp-vals">
+      <div class="mob-comp-val"><div class="mob-comp-val-lbl">Base</div><div class="mob-comp-val-num">${fv2(patA)}</div></div>
+      <div class="mob-comp-val"><div class="mob-comp-val-lbl">Compare</div><div class="mob-comp-val-num">${fv2(patB)}</div></div>
+      <div class="mob-comp-val"><div class="mob-comp-val-lbl">Δ</div><div class="mob-comp-val-num">${fdMob(dp)}</div></div>
+      <div class="mob-comp-val"><div class="mob-comp-val-lbl">Δ% Anual</div><div class="mob-comp-val-num">${fdPctMob(dAnualPat)}</div></div>
+    </div>
+  </div>`;
+
+  CATS.forEach(cat=>{
+    const va=scale(TA.catClp[cat]||0), vb=scale(TB.catClp[cat]||0);
+    if(va===0&&vb===0) return;
+    const d=vb-va, dPct=va!==0?d/Math.abs(va)*100:null, dAnual=va!==0?(d/days*365)/Math.abs(va)*100:null;
+    const color=COLORS[cat]||'#666';
+    resultsHtml+=`<div class="mob-comp-card">
+      <div class="mob-comp-catname"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${color};margin-right:6px;vertical-align:middle"></span>${cat}</div>
+      <div class="mob-comp-vals">
+        <div class="mob-comp-val"><div class="mob-comp-val-lbl">Base</div><div class="mob-comp-val-num">${fv2(va)}</div></div>
+        <div class="mob-comp-val"><div class="mob-comp-val-lbl">Compare</div><div class="mob-comp-val-num">${fv2(vb)}</div></div>
+        <div class="mob-comp-val"><div class="mob-comp-val-lbl">Δ</div><div class="mob-comp-val-num">${fdMob(d)}</div></div>
+        <div class="mob-comp-val"><div class="mob-comp-val-lbl">Δ% Anual</div><div class="mob-comp-val-num">${fdPctMob(dAnual)}</div></div>
+      </div>
+    </div>`;
+  });
+
+  // TOTAL GENERAL card
+  const dg=totB-totA, dgp=totA!==0?dg/Math.abs(totA)*100:null, dgAnual=totA!==0?(dg/days*365)/Math.abs(totA)*100:null;
+  resultsHtml+=`<div class="mob-comp-card is-total">
+    <div class="mob-comp-catname">Total General</div>
+    <div class="mob-comp-vals">
+      <div class="mob-comp-val"><div class="mob-comp-val-lbl">Base</div><div class="mob-comp-val-num">${fv2(totA)}</div></div>
+      <div class="mob-comp-val"><div class="mob-comp-val-lbl">Compare</div><div class="mob-comp-val-num">${fv2(totB)}</div></div>
+      <div class="mob-comp-val"><div class="mob-comp-val-lbl">Δ</div><div class="mob-comp-val-num">${fdMob(dg)}</div></div>
+      <div class="mob-comp-val"><div class="mob-comp-val-lbl">Δ% Anual</div><div class="mob-comp-val-num">${fdPctMob(dgAnual)}</div></div>
+    </div>
+  </div>`;
+
+  document.getElementById('tw').innerHTML=h+resultsHtml;
+  setTimeout(()=>{
+    const a=document.getElementById('mcompA'), b=document.getElementById('mcompB');
+    if(a) a.value=comp.dateA; if(b) b.value=comp.dateB;
+  },0);
+}
+
+async function runCompararMob(){
+  const a=document.getElementById('mcompA')?.value, b=document.getElementById('mcompB')?.value;
+  if(!a||!b) return;
+  let dA=a, dB=b;
+  if(dA>dB)[dA,dB]=[dB,dA];
+  document.getElementById('tw').innerHTML=`<div class="mob-comp-form" style="text-align:center"><div class="mob-comp-lbl">Cargando snapshots…</div></div><div class="sb"><div class="spin"></div></div>`;
+  try{ await _loadComp(dA,dB); }
+  catch(e){ document.getElementById('tw').innerHTML=`<div class="mob-sec-title" style="color:#f85149">Error: ${e.message}</div>`; }
+}
+
+// ─────────────────────────────────────────
+// MOBILE: ROUTING OVERRIDES
+// ─────────────────────────────────────────
+// Override renderCurrent to route mobile views
+const _renderCurrentDesktop=renderCurrent;
+function renderCurrent(){
+  if(!isMob()){ _renderCurrentDesktop(); return; }
+  mobUpdateNav();
+  const v=S.mainView;
+  if(v==='summary'||v==='detail') renderSummaryMob();
+  else if(v==='caja'){
+    if(S.subCaja==='activos') renderCajaMob();
+    else if(S.subCaja==='cupos') renderCuposMob();
+    else renderPagosMob();
+  }
+  else if(v==='comparar') renderCompararMob();
+}
+
+// Override setCompUnit to route mobile renderComparar
+const _setCompUnitOrig=setCompUnit;
+function setCompUnit(u){
+  S.compUnit=u;
+  if(isMob()) renderCompararMob(); else renderComparar();
+}
+
+// Override renderRates to also update mobile header
+const _renderRatesOrig=renderRates;
+function renderRates(){
+  _renderRatesOrig();
+  const el=document.getElementById('mobRates');
+  if(el) el.innerHTML=mobRatesHtml();
+}
+
+// Override refresh to also reset mobile date select
+const _refreshOrig=refresh;
+async function refresh(){
+  showLoad('Actualizando…');
+  try{
+    const [rates,data]=await Promise.all([getRates(),getSaldos()]);
+    S.rates=rates; S.raw=data; S.date='actual';
+    document.getElementById('dsel').value='actual';
+    renderRates(); renderCurrent();
+  }catch(e){showErr(e.message)}
+}
+
+// Handle resize (desktop ↔ mobile)
+let _lastMob=isMob();
+window.addEventListener('resize',()=>{
+  const nowMob=isMob();
+  if(nowMob!==_lastMob){ _lastMob=nowMob; renderCurrent(); }
+});
 
 init();
 </script>
