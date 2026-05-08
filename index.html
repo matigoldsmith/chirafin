@@ -2190,10 +2190,12 @@ function setMobUnit(u){
 
 // ─────────────────────────────────────────
 // MOBILE: ROUTING OVERRIDES
+// NOTE: use variable reassignment (not function declarations) to avoid
+// JS hoisting — function declarations with the same name get hoisted and
+// the last one wins, so the "original" capture would grab itself → stack overflow.
 // ─────────────────────────────────────────
-// Override renderCurrent to route mobile views
-const _renderCurrentDesktop=renderCurrent;
-function renderCurrent(){
+const _renderCurrentDesktop = renderCurrent;
+renderCurrent = function(){
   if(!isMob()){ _renderCurrentDesktop(); return; }
   mobUpdateNav();
   const v=S.mainView;
@@ -2204,26 +2206,23 @@ function renderCurrent(){
     else renderPagosMob();
   }
   else if(v==='comparar') renderCompararMob();
-}
+};
 
-// Override setCompUnit to route mobile renderComparar
-const _setCompUnitOrig=setCompUnit;
-function setCompUnit(u){
+const _setCompUnitOrig = setCompUnit;
+setCompUnit = function(u){
   S.compUnit=u;
   if(isMob()) renderCompararMob(); else renderComparar();
-}
+};
 
-// Override renderRates to also update mobile header
-const _renderRatesOrig=renderRates;
-function renderRates(){
+const _renderRatesOrig = renderRates;
+renderRates = function(){
   _renderRatesOrig();
   const el=document.getElementById('mobRates');
   if(el) el.innerHTML=mobRatesHtml();
-}
+};
 
-// Override refresh to also reset mobile date select
-const _refreshOrig=refresh;
-async function refresh(){
+const _refreshOrig = refresh;
+refresh = async function(){
   showLoad('Actualizando…');
   try{
     const [rates,data]=await Promise.all([getRates(),getSaldos()]);
@@ -2231,7 +2230,7 @@ async function refresh(){
     document.getElementById('dsel').value='actual';
     renderRates(); renderCurrent();
   }catch(e){showErr(e.message)}
-}
+};
 
 // Handle resize (desktop ↔ mobile)
 let _lastMob=isMob();
