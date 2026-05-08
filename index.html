@@ -1,0 +1,1523 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ChiraFin</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;background:#0d1117;color:#e6edf3;min-height:100vh;font-size:13px}
+
+/* ── HEADER ── */
+.hdr{background:#161b22;border-bottom:1px solid #30363d;padding:13px 24px;display:flex;align-items:center;justify-content:space-between;gap:16px;position:sticky;top:0;z-index:100}
+.logo{font-size:20px;font-weight:700;letter-spacing:-.5px}
+.logo-c{color:#7c83fd}.logo-f{color:#e6edf3}
+.rates{display:flex;gap:14px;align-items:center;font-size:12px}
+.rpill{display:flex;align-items:center;gap:5px;background:#21262d;border:1px solid #30363d;border-radius:6px;padding:4px 10px}
+.rl{color:#6e7681;font-size:10px;text-transform:uppercase;letter-spacing:.5px}
+.rv{color:#e6edf3;font-weight:600}
+.rd{color:#6e7681;font-size:11px}
+
+/* ── CTRL BAR ── */
+.ctrl{background:#161b22;border-bottom:1px solid #30363d;padding:9px 24px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.tabs{display:flex;gap:2px;background:#21262d;border-radius:8px;padding:3px}
+.tab{padding:5px 14px;border-radius:6px;border:none;background:transparent;color:#8b949e;cursor:pointer;font-size:12px;font-weight:500;transition:all .15s;font-family:inherit;white-space:nowrap}
+.tab.on{background:#7c83fd;color:#fff}
+.tab:hover:not(.on){color:#e6edf3;background:#30363d}
+.tab.sub{font-size:11px;padding:4px 11px}
+.tab.sub.on{background:#30363d;color:#e6edf3}
+.sep{width:1px;height:20px;background:#30363d;margin:0 4px}
+.dc{display:flex;align-items:center;gap:8px;margin-left:auto}
+select{background:#21262d;border:1px solid #30363d;color:#e6edf3;padding:5px 10px;border-radius:6px;font-size:12px;cursor:pointer;font-family:inherit;outline:none}
+select:focus{border-color:#7c83fd}
+.btn{padding:5px 12px;border-radius:6px;border:1px solid #30363d;background:#21262d;color:#8b949e;cursor:pointer;font-size:12px;font-family:inherit;transition:all .15s;white-space:nowrap}
+.btn:hover{border-color:#7c83fd;color:#7c83fd}
+.btn.on{border-color:#7c83fd;color:#7c83fd}
+
+/* ── CONTENT ── */
+.content{padding:18px 24px;max-width:1100px;margin:0 auto}
+
+/* ── SUMMARY CARDS ── */
+.cards{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px}
+.card{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:14px 18px}
+.card.ci{border-top:2px solid #7c83fd}
+.card.ct{border-top:2px solid #3fb950}
+.card.cm{border-top:2px solid #6e7681;min-width:185px}
+.cl{font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:#8b949e;margin-bottom:5px}
+.cv{font-size:22px;font-weight:700;line-height:1.2}
+.cv-row{display:flex;gap:10px;flex-wrap:wrap;align-items:baseline;margin-top:2px}
+.cv-val{font-size:20px;font-weight:700}
+.cv-unit{font-size:11px;font-weight:500;opacity:.7;margin-left:2px}
+.cv-sep{color:#30363d;font-weight:300}
+.card.ci .cv-val{color:#7c83fd}
+.card.ct .cv-val{color:#3fb950}
+.cs{font-size:11px;color:#6e7681;margin-top:4px}
+
+/* ── TABLE WRAPPER ── */
+.tw{background:#161b22;border:1px solid #30363d;border-radius:10px;overflow:auto}
+table{width:100%;border-collapse:collapse}
+thead th{padding:8px 14px;text-align:right;font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:#6e7681;background:#21262d;border-bottom:1px solid #30363d;white-space:nowrap;font-weight:600}
+thead th:first-child{text-align:left}
+thead th.thp{color:#7c83fd}
+thead th.thl{text-align:left}
+
+tr.cr{cursor:pointer;transition:background .1s;border-bottom:1px solid #30363d}
+tr.cr:hover{background:#21262d}
+tr.dr{background:rgba(0,0,0,.22);border-bottom:1px solid rgba(48,54,61,.4);display:none}
+tr.dr.open{display:table-row}
+tr.plain{border-bottom:1px solid #30363d}
+tr.plain:hover{background:#21262d}
+
+td{padding:8px 14px;text-align:right;white-space:nowrap;vertical-align:middle}
+td:first-child{text-align:left}
+td.tdl{text-align:left}
+
+.cc{display:flex;align-items:center;gap:8px}
+.xb{width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;border-radius:4px;color:#6e7681;font-size:9px;flex-shrink:0;transition:transform .18s;background:#21262d;user-select:none}
+.xb.open{transform:rotate(90deg)}
+.xb.empty{opacity:.2;cursor:default}
+.cdot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.cn{font-weight:600;font-size:13px}
+
+.dic{display:flex;flex-direction:column;padding-left:38px}
+.dr1{display:flex;align-items:center;gap:6px}
+.di{font-weight:500;color:#e6edf3;font-size:12px}
+.ditem{color:#6e7681;font-size:11px;margin-top:1px}
+.bdg{display:inline-block;font-size:9px;font-weight:700;letter-spacing:.5px;padding:1px 5px;border-radius:3px;flex-shrink:0}
+.bpn{background:rgba(88,166,255,.15);color:#58a6ff}
+.bpj{background:rgba(210,153,34,.15);color:#d29922}
+
+.vp{color:#3fb950}
+.vn{color:#f85149}
+.ve{color:#6e7681;font-size:11px}
+.vw{color:#e6edf3}
+.dim{color:#6e7681}
+
+.pbw{display:flex;align-items:center;justify-content:flex-end;gap:6px}
+.pbo{width:44px;height:4px;background:#21262d;border-radius:2px;overflow:hidden}
+.pbi{height:100%;border-radius:2px;background:#7c83fd}
+
+/* subtotal/total rows */
+tr.rs td{padding:9px 14px;background:rgba(124,131,253,.07);border-top:2px solid #7c83fd;border-bottom:2px solid #30363d;font-weight:700;color:#7c83fd;font-size:12px}
+tr.rp td{padding:9px 14px;background:rgba(210,125,34,.07);border-top:2px solid #f0883e;border-bottom:2px solid #30363d;font-weight:700;color:#f0883e;font-size:12px}
+tr.rt td{padding:11px 14px;background:rgba(63,185,80,.07);border-top:2px solid #3fb950;font-weight:700;color:#3fb950;font-size:13px}
+tr.rh td{padding:6px 14px;background:#21262d;font-weight:600;color:#7c83fd;font-size:11px;letter-spacing:.5px;text-transform:uppercase}
+tr.rcg td{padding:7px 14px;border-bottom:1px solid #30363d;color:#8b949e;font-size:12px}
+
+/* ── LOADING / ERROR ── */
+.sb{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 24px;gap:12px;color:#8b949e;text-align:center}
+.spin{width:30px;height:30px;border:3px solid #30363d;border-top-color:#7c83fd;border-radius:50%;animation:spin .75s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── CAJA VIEW ── */
+.caja-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+.caja-col{background:#161b22;border:1px solid #30363d;border-radius:10px;overflow:hidden}
+.caja-head{padding:8px 14px;background:#21262d;font-size:10px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;border-bottom:1px solid #30363d}
+.caja-col table{width:100%;border-collapse:collapse}
+.caja-col td{padding:6px 14px;font-size:12px;border-bottom:1px solid rgba(48,54,61,.4)}
+.caja-col tr:last-child td{border-bottom:none}
+.caja-col .ci{color:#e6edf3}
+.caja-col .cs{color:#6e7681;font-size:10px}
+.caja-col .cv{text-align:right;font-weight:600;white-space:nowrap}
+.caja-col .cm{color:#6e7681;font-size:10px;text-align:right}
+.caja-subtotal td{background:rgba(30,36,43,.8);font-weight:700;font-size:12px}
+/* summary bar */
+.caja-bar{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
+.caja-metric{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:10px 14px}
+.caja-metric .cm-label{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:#6e7681;margin-bottom:4px}
+.caja-metric .cm-val{font-size:16px;font-weight:700}
+
+/* ── COMPARAR VIEW ── */
+.comp-form{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+.comp-form label{font-size:12px;color:#8b949e;margin-right:4px}
+.comp-form input[type=date]{background:#21262d;border:1px solid #30363d;color:#e6edf3;padding:5px 10px;border-radius:6px;font-size:12px;font-family:inherit;outline:none}
+.comp-form input[type=date]:focus{border-color:#7c83fd}
+.comp-mode{display:flex;gap:6px;flex-wrap:wrap}
+.comp-mode-btn{padding:5px 12px;border-radius:6px;border:1px solid #30363d;background:#21262d;color:#8b949e;cursor:pointer;font-size:11px;font-family:inherit;transition:all .15s}
+.comp-mode-btn:hover{border-color:#7c83fd;color:#7c83fd}
+.comp-mode-btn.on{border-color:#7c83fd;color:#7c83fd;background:rgba(124,131,253,.1)}
+
+/* cupos form */
+.cupo-edit{padding:4px;background:transparent;border:1px solid #30363d;border-radius:4px;color:#e6edf3;font-size:12px;font-family:inherit;text-align:right;width:120px;outline:none}
+.cupo-edit:focus{border-color:#7c83fd}
+
+/* ── DEBUG ── */
+.dbp{margin-top:14px;background:#161b22;border:1px solid #30363d;border-radius:10px;overflow:hidden;display:none}
+.dbh{padding:9px 16px;background:#21262d;cursor:pointer;font-size:11px;color:#8b949e;display:flex;justify-content:space-between;align-items:center;user-select:none}
+.dbh:hover{color:#e6edf3}
+.dbb{display:none;padding:14px}
+.dbb.open{display:block}
+.dbb pre{font-family:'SF Mono','Fira Code','Courier New',monospace;font-size:11px;color:#3fb950;white-space:pre-wrap;line-height:1.7}
+
+.foot{text-align:center;padding:14px;font-size:11px;color:#6e7681;border-top:1px solid #30363d;margin-top:16px}
+.dlive{display:inline-block;width:6px;height:6px;border-radius:50%;background:#3fb950;margin-right:4px;animation:pulse 2s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+
+.info-box{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:24px;color:#8b949e;font-size:13px}
+.view-hidden{display:none}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <div class="logo"><span class="logo-c">Chira</span><span class="logo-f">Fin</span></div>
+  <div class="rates" id="ratesBar"><span class="rd">Cargando tasas…</span></div>
+</div>
+
+<div class="ctrl">
+  <!-- Main menu -->
+  <div class="tabs" id="mainTabs">
+    <button class="tab on" onclick="setView('summary')">Patrimonio</button>
+    <button class="tab" onclick="setView('caja')">Caja</button>
+    <button class="tab" onclick="setView('comparar')">Comparar</button>
+  </div>
+
+  <!-- Sub-tabs Patrimonio -->
+  <div class="tabs" id="subPatrimonio">
+    <button class="tab sub on" onclick="setSubPat('summary')">Resumida</button>
+    <button class="tab sub" onclick="setSubPat('detail')">Completa</button>
+  </div>
+
+  <!-- Sub-tabs Caja -->
+  <div class="tabs view-hidden" id="subCaja">
+    <button class="tab sub on" onclick="setSubCaja('activos')">Activos/Pasivos</button>
+    <button class="tab sub" onclick="setSubCaja('cupos')">Cupos TdC</button>
+    <button class="tab sub" onclick="setSubCaja('pagos')">Pagos TdC</button>
+  </div>
+
+  <!-- Persona filter (hidden in comparar/caja) -->
+  <div class="tabs" id="personaTabs">
+    <button class="tab sub on" onclick="setP('todos')">Todos</button>
+    <button class="tab sub" onclick="setP('PN')">PN</button>
+    <button class="tab sub" onclick="setP('PJ')">PJ</button>
+  </div>
+
+  <div class="dc">
+    <select id="dsel" onchange="onDate(this.value)">
+      <option value="actual">▶ Actual</option>
+    </select>
+    <button class="btn" onclick="refresh()">↻</button>
+    <button class="btn" id="dbBtn" onclick="toggleDb()">🔍 Debug</button>
+  </div>
+</div>
+
+<div class="content">
+  <!-- Main content area -->
+  <div class="tw" id="tw">
+    <div class="sb"><div class="spin"></div><div>Conectando con Supabase…</div></div>
+  </div>
+
+  <div class="dbp" id="dbp">
+    <div class="dbh" onclick="toggleDb()">
+      <span>🔍 Sanity Checks &amp; Debug</span><span id="dbarr">▼</span>
+    </div>
+    <div class="dbb" id="dbb"><pre id="dbout">Pendiente…</pre></div>
+  </div>
+
+  <div class="foot"><span class="dlive"></span>ChiraFin · Datos live desde Supabase</div>
+</div>
+
+<script>
+// ─────────────────────────────────────────
+// CONFIG
+// ─────────────────────────────────────────
+const BASE = 'https://mbovlripktxzjqyerizg.supabase.co';
+const KEY  = 'sb_publishable_AZjgV0FBDO5SCKehvDe6EQ_Tn0vdbWD';
+const H    = { apikey:KEY, Authorization:`Bearer ${KEY}`, 'Content-Type':'application/json', Accept:'application/json' };
+
+const CATS   = ['Cash','Fondos líquidos','Fondos Inmobiliarios','Propiedades de Inversión','Inversión en startups','Fondos previsionales','Casa','Créditos Hipotecarios'];
+const INVEST = CATS.slice(0,6); // Cash..Fondos previsionales — excludes Casa + CH
+const CAT_ORDER = CATS; // same order as Python
+
+const COLORS = {
+  'Cash':'#3fb950',
+  'Fondos líquidos':'#58a6ff',
+  'Fondos Inmobiliarios':'#d29922',
+  'Propiedades de Inversión':'#bc8cff',
+  'Inversión en startups':'#f85149',
+  'Fondos previsionales':'#39d353',
+  'Casa':'#8b949e',
+  'Créditos Hipotecarios':'#6e7681'
+};
+
+// Short-term investments that go into Activos Corto Plazo in Caja
+const SHORT_TERM_INV = new Set([
+  'Neat|Neat',
+  'Racional|CFIETFCD',
+  'Fraccional|Fraccional',
+  'Itaú PJ|CFIETFCD',
+  'Fintual|Cash Owa',
+]);
+
+// ─────────────────────────────────────────
+// STATE
+// ─────────────────────────────────────────
+const S = {
+  rates: null,
+  raw: [],
+  persona: 'todos',
+  date: 'actual',
+  mainView: 'summary',   // 'summary'|'detail'|'caja'|'cupos'|'pagos'|'comparar'
+  subPat: 'summary',
+  subCaja: 'activos',
+  config: { safety_cash: -35000000, prov_inversion: 0, tolerance: -5 },
+  cupos: (()=>{
+    const def={
+      'Scotiabank|TdC 3134':72030000,
+      'Scotiabank|TdC 2730':60000000,
+      'Itaú|TdC 6132':42500000,
+      'Santander|TdC 4765':15000000,
+      'Banco Ripley|TdC 9647':10000000,
+      'Santander|TdC 8098':8000000,
+      'Itú|TdC Itú':5000000,
+      'Itú|TdC 0256':5000000,
+      'Líder BCI|TdC 5037':3840000,
+      'Banco de Chile|TdC 7164':2607200,
+    };
+    const stored=JSON.parse(localStorage.getItem('chirafin_cupos')||'{}');
+    return Object.assign({},def,stored); // stored overrides defaults
+  })(),
+  comp: { dateA: null, dateB: null, snapA: null, snapB: null, ratesA: null, ratesB: null },
+  compUnit: 'clp',   // 'clp'|'usd'|'uf'
+  pagos: null,
+};
+
+// ─────────────────────────────────────────
+// CATEGORIZE
+// ─────────────────────────────────────────
+function norm(s){ return (s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase().trim(); }
+function hasW(kw,t){ return new RegExp('(?<![A-Z0-9])'+kw.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'(?![A-Z0-9])').test(t); }
+function has(kw,t){ return t.includes(kw); }
+
+function catToShort(cat,inst,item){
+  const c=norm(cat), i=norm(inst||''), it=norm(item||'');
+  if(has('CASH',c)||has('CASH',i))                          return 'Cash';
+  if(hasW('CC',c)||hasW('CC',i))                            return 'Cash';
+  if(has('CUENTAS CORRIENTES',c)||has('CUENTAS CORRIENTES',i)) return 'Cash';
+  if(has('SAVINGS',c)||has('SAVINGS',i))                    return 'Cash';
+  if(has('CHECKING',c)||has('CHECKING',i))                  return 'Cash';
+  if(has('TAIHU',it)||has('CASA',it))                       return 'Casa';
+  if(has('CONSORCIO',i)&&(has('CH',c)||has('HIPOT',c)))     return 'Casa';
+  if(has('STARTUP',c)||has('WOPERTY',c)||has('WOPERTY',i))  return 'Inversión en startups';
+  if(has('PROPIEDAD',c))                                     return 'Propiedades de Inversión';
+  if(has('INMOBILIARI',c))                                   return 'Fondos Inmobiliarios';
+  if((has('CH',c)||has('HIPOT',c)||has('CREDITO',c))&&!has('LINEA',c)&&!has('TARJETA',c)&&!has('TDC',c)&&!has('LDC',c)){
+    if(has('CONSORCIO',i))                                   return 'Casa';
+    if(has('ITAU',i)||has('CHILE',i))                        return 'Propiedades de Inversión';
+    return 'Créditos Hipotecarios';
+  }
+  if(['LIQUID','TDC','LDC','TARJETA','LINEA','INVERSION'].some(k=>has(k,c))) return 'Fondos líquidos';
+  if(has('PREVISIONAL',c)||has('AFP',c)||has('AFC',c))       return 'Fondos previsionales';
+  if(has('CASA',c))                                          return 'Casa';
+  return 'Sin categoría';
+}
+
+// ─────────────────────────────────────────
+// CURRENCY
+// ─────────────────────────────────────────
+function toCLP(monto,moneda,rates){
+  const r=rates||S.rates;
+  if(!r||monto==null) return 0;
+  if(moneda==='CLP') return +monto;
+  if(moneda==='USD') return +monto * r.usd;
+  if(moneda==='UF')  return +monto * r.uf;
+  return +monto;
+}
+
+// ─────────────────────────────────────────
+// API
+// ─────────────────────────────────────────
+async function api(url,opts={}){
+  const r=await fetch(url,{headers:H,...opts});
+  if(!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text().catch(()=>'')}`);
+  return r.json();
+}
+const getRates   = ()=>api(`${BASE}/rest/v1/currency_rates?order=date.desc&limit=1`).then(d=>d[0]);
+const getSaldos  = ()=>api(`${BASE}/rest/v1/v_latest_saldos`);
+const getSnap    = d=>api(`${BASE}/rest/v1/rpc/get_snapshot`,{method:'POST',body:JSON.stringify({ts_filter:`${d} 23:59:59`})});
+const getDates   = ()=>api(`${BASE}/rest/v1/rpc/get_snapshot_dates`,{method:'POST',body:JSON.stringify({})}).catch(()=>[]);
+const getRatesD  = d=>api(`${BASE}/rest/v1/currency_rates?date=eq.${d}&limit=1`).then(a=>a[0]).catch(()=>null);
+const getConfig  = ()=>api(`${BASE}/rest/v1/script_config`).catch(()=>[]);
+const getPagos   = ()=>api(`${BASE}/rest/v1/pagos_tdc?order=timestamp.desc`).catch(()=>[]);
+
+const tsOf = r => r.timestamp||r.ts||null;
+
+// ─────────────────────────────────────────
+// DEDUP
+// ─────────────────────────────────────────
+function dedup(rows){
+  // Key includes institucion to avoid dropping rows from different banks with same item
+  const hasManual={};
+  rows.forEach(r=>{
+    const k=(r.institucion||'')+'|'+(r.item||'')+'|'+(r.persona||'')+'|'+(r.moneda||'');
+    if(r.source==='manual') hasManual[k]=true;
+  });
+  return rows.filter(r=>{
+    if(r.source!=='auto') return true;
+    const k=(r.institucion||'')+'|'+(r.item||'')+'|'+(r.persona||'')+'|'+(r.moneda||'');
+    return !hasManual[k];
+  });
+}
+
+// ─────────────────────────────────────────
+// PROCESS
+// ─────────────────────────────────────────
+function processRows(rawRows, personaOverride, rates, allowHistorial=false){
+  const r0=rates||S.rates;
+  // source='historial' = old snapshot entries — filter for live view, keep for snapshots
+  let rows=allowHistorial ? rawRows : rawRows.filter(r=>r.source!=='historial');
+  rows=dedup(rows);
+  const p=personaOverride||S.persona;
+  if(p!=='todos') rows=rows.filter(r=>r.persona===p);
+  return rows.map(r=>({
+    ...r,
+    cat: catToShort(r.categoria||'',r.institucion||'',r.item||''),
+    clp: toCLP(r.monto, r.moneda, r0)
+  }));
+}
+
+function aggregate(rows){
+  const g={};
+  CATS.forEach(c=>{g[c]=[]});
+  const other=[];
+  rows.forEach(r=>{ if(g[r.cat]!==undefined) g[r.cat].push(r); else other.push(r); });
+  const clpOf=cat=>g[cat].reduce((s,r)=>s+r.clp,0);
+  const catClp={};
+  CATS.forEach(c=>{catClp[c]=clpOf(c)});
+  const invClp=INVEST.reduce((s,c)=>s+catClp[c],0);
+  const totClp=CATS.reduce((s,c)=>s+catClp[c],0);
+  return {g, catClp, invClp, totClp, other};
+}
+
+// ─────────────────────────────────────────
+// FORMAT
+// ─────────────────────────────────────────
+function fi(v){ return Math.round(v).toLocaleString('es-CL'); }
+function fCLP(clp){ return fi(clp/1e6); }
+function fUSD(clp){ return fi(clp/(S.rates?.usd||1)/1e3); }
+function fUF(clp) { return fi(clp/(S.rates?.uf||1)); }
+function fPct(clp,tot){ return tot===0?'0.0%':(clp/tot*100).toFixed(1)+'%'; }
+function fMonto(m,moneda){ // native monto formatted
+  if(m==null||m===0) return '—';
+  const v=parseFloat(m);
+  return fi(v);
+}
+function fmtTs(ts){
+  if(!ts) return '—';
+  try{
+    const d=new Date(ts.replace(' ','T'));
+    const mes=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'][d.getMonth()];
+    return `${String(d.getDate()).padStart(2,'0')}-${mes} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+  }catch(e){return ts.slice(0,16)||'—'}
+}
+function tipoAct(r){
+  const it=(r.item||''), inst=(r.institucion||'').toLowerCase();
+  if(['CFIETFCD','CFINASDAQ','CFISP500','CFIETFGE'].includes(it)&&(inst.includes('itau')||inst.includes('itaú'))) return 'Semiautomática';
+  if(inst.includes('hdz')||inst.includes('wbuild')) return 'Semiautomática';
+  if(r.source==='auto') return 'Automática';
+  return 'Manual';
+}
+function vc(v){ return v<0?'vn':v>0?'vp':'dim'; }
+function em(){ return '<span class="ve">—</span>'; }
+
+// ─────────────────────────────────────────
+// NAV
+// ─────────────────────────────────────────
+function setView(v){
+  S.mainView=v;
+  // Main tabs
+  document.querySelectorAll('#mainTabs .tab').forEach((t,i)=>
+    t.classList.toggle('on',['summary','caja','comparar'][i]===v));
+  // Sub-tabs visibility
+  document.getElementById('subPatrimonio').classList.toggle('view-hidden', v==='caja'||v==='comparar');
+  document.getElementById('subCaja').classList.toggle('view-hidden', v!=='caja');
+  // Filtro PN/PJ solo en vistas de patrimonio (summary y detail)
+  document.getElementById('personaTabs').classList.toggle('view-hidden', v!=='summary'&&v!=='detail');
+  document.getElementById('dsel').parentElement.style.display=(v==='comparar')?'none':'flex';
+
+  renderCurrent();
+}
+
+function setSubPat(v){
+  S.subPat=v; S.mainView=v;
+  document.querySelectorAll('#subPatrimonio .tab').forEach((t,i)=>
+    t.classList.toggle('on',['summary','detail'][i]===v));
+  renderCurrent();
+}
+
+function setSubCaja(v){
+  S.subCaja=v;
+  document.querySelectorAll('#subCaja .tab').forEach((t,i)=>
+    t.classList.toggle('on',['activos','cupos','pagos'][i]===v));
+  renderCurrent();
+}
+
+function setP(p){
+  S.persona=p;
+  document.querySelectorAll('#personaTabs .tab').forEach((t,i)=>
+    t.classList.toggle('on',['todos','PN','PJ'][i]===p));
+  renderCurrent();
+}
+
+function onDate(v){ S.date=v; loadData(); }
+
+function setCompUnit(u){
+  S.compUnit=u;
+  // Re-render form to update active tab highlighting
+  renderComparar();
+}
+
+// ─────────────────────────────────────────
+// RENDER DISPATCH
+// ─────────────────────────────────────────
+function renderCurrent(){
+  const v=S.mainView;
+  if(v==='summary') renderSummary();
+  else if(v==='detail') renderDetail();
+  else if(v==='caja') {
+    if(S.subCaja==='activos') renderCaja();
+    else if(S.subCaja==='cupos') renderCupos();
+    else renderPagos();
+  }
+  else if(v==='comparar') renderComparar();
+}
+
+// ─────────────────────────────────────────
+// RATES BAR
+// ─────────────────────────────────────────
+function renderRates(){
+  const r=S.rates;
+  if(!r) return;
+  document.getElementById('ratesBar').innerHTML=
+    `<div class="rpill"><span class="rl">USD</span><span class="rv">$${fi(r.usd)}</span></div>`+
+    `<div class="rpill"><span class="rl">UF</span><span class="rv">$${fi(r.uf)}</span></div>`+
+    `<span class="rd">al ${r.date}</span>`;
+}
+
+// ─────────────────────────────────────────
+// CARDS
+// ─────────────────────────────────────────
+function cardHtml(clp, colorClass){
+  const usd=S.rates?.usd||1, uf=S.rates?.uf||1;
+  const clpMM=fi(Math.round(clp/1e6));
+  const usdM =fi(Math.round(clp/usd/1e3));
+  const ufV  =fi(Math.round(clp/uf));
+  return `<span class="cv-val ${colorClass}">${clpMM}</span><span class="cv-unit">MM</span>`+
+         `<span class="cv-sep"> · </span>`+
+         `<span class="cv-val ${colorClass}">${usdM}</span><span class="cv-unit">M USD</span>`+
+         `<span class="cv-sep"> · </span>`+
+         `<span class="cv-val ${colorClass}">${ufV}</span><span class="cv-unit">UF</span>`;
+}
+// ─────────────────────────────────────────
+// VIEW: TABLA RESUMIDA (summary by category)
+// ─────────────────────────────────────────
+function renderSummary(){
+  if(!S.rates){showLoad();return}
+  const rows=processRows(S.raw);
+  const T=aggregate(rows);
+  const {g,catClp,invClp,totClp}=T;
+
+  let h=`<table><thead><tr>
+    <th style="min-width:220px">Categoría</th>
+    <th>CLP MM</th><th>USD M</th><th>UF</th>
+    <th class="thp">%</th>
+  </tr></thead><tbody>`;
+
+  let summaryPatriShown=false;
+  const _addSummaryPatri=()=>{
+    summaryPatriShown=true;
+    const pctInv=fPct(invClp,totClp);
+    const pctInvNum=totClp===0?0:Math.min(invClp/totClp*100,100);
+    h+=`<tr class="rp">
+      <td>TOTAL PATRIMONIO INVERSIONES</td>
+      <td>${fCLP(invClp)}</td><td>${fUSD(invClp)}</td><td>${fUF(invClp)}</td>
+      <td><div class="pbw"><div class="pbo"><div class="pbi" style="width:${pctInvNum}%;background:#f0883e"></div></div>
+        <span style="color:#f0883e;font-weight:700">${pctInv}</span></div></td>
+    </tr>`;
+  };
+  CATS.forEach((cat,idx)=>{
+    const clp=catClp[cat];
+    const items=g[cat];
+    // Skip categories with no items — matches Python: if cat not in cat_totals: continue
+    if(items.length===0) return;
+    // Insert TOTAL PATRIMONIO INVERSIONES just before "Casa" — matches Python trigger
+    if(cat==='Casa'&&!summaryPatriShown) _addSummaryPatri();
+    const color=COLORS[cat]||'#666';
+    const rid=`r${idx}`;
+    const pct=fPct(clp,totClp);
+    const pctNum=totClp===0?0:Math.min(Math.abs(clp/totClp)*100,100);
+
+    h+=`<tr class="cr" onclick="xp('${rid}')" >
+      <td><div class="cc">
+        <span class="xb" id="xi${rid}">▶</span>
+        <span class="cdot" style="background:${color}"></span>
+        <span class="cn">${cat}</span>
+      </div></td>
+      <td class="${vc(clp)}">${fCLP(clp)}</td>
+      <td class="${vc(clp)}">${fUSD(clp)}</td>
+      <td class="${vc(clp)}">${fUF(clp)}</td>
+      <td><div class="pbw"><div class="pbo"><div class="pbi" style="width:${pctNum}%"></div></div>
+        <span style="color:#7c83fd;font-weight:600;font-size:12px">${pct}</span></div></td>
+    </tr>`;
+
+    [...items].sort((a,b)=>Math.abs(b.clp)-Math.abs(a.clp)).forEach(it=>{
+      const neg=it.clp<0;
+      h+=`<tr class="dr" id="${rid}-d">
+        <td><div class="dic">
+          <div class="dr1">
+            <span class="di">${it.institucion||'—'}</span>
+            <span class="bdg b${(it.persona||'pn').toLowerCase()}">${it.persona||''}</span>
+          </div>
+          <div class="ditem">${it.item||'—'} · ${it.moneda} · ${it.categoria||''}</div>
+        </div></td>
+        <td class="${neg?'vn':'vp'}">${fCLP(it.clp)}</td>
+        <td class="${neg?'vn':'vp'}">${fUSD(it.clp)}</td>
+        <td class="${neg?'vn':'vp'}">${fUF(it.clp)}</td>
+        <td><span class="dim">${fPct(it.clp,totClp)}</span></td>
+      </tr>`;
+    });
+  });
+  // Fallback: if no non-invest cats exist, show TOTAL PATRIMONIO INVERSIONES at end
+  if(!summaryPatriShown){
+    const pctInv=fPct(invClp,totClp);
+    const pctInvNum=totClp===0?0:Math.min(invClp/totClp*100,100);
+    h+=`<tr class="rp">
+      <td>TOTAL PATRIMONIO INVERSIONES</td>
+      <td>${fCLP(invClp)}</td><td>${fUSD(invClp)}</td><td>${fUF(invClp)}</td>
+      <td><div class="pbw"><div class="pbo"><div class="pbi" style="width:${pctInvNum}%;background:#f0883e"></div></div>
+        <span style="color:#f0883e;font-weight:700">${pctInv}</span></div></td>
+    </tr>`;
+  }
+
+  h+=`<tr class="rt">
+    <td>TOTAL GENERAL</td>
+    <td>${fCLP(totClp)}</td><td>${fUSD(totClp)}</td><td>${fUF(totClp)}</td>
+    <td><span style="color:#3fb950;font-weight:700">100%</span></td>
+  </tr></tbody></table>`;
+
+  document.getElementById('tw').innerHTML=h;
+  renderSanity(rows,T);
+}
+
+// ─────────────────────────────────────────
+// VIEW: TABLA COMPLETA (show_last_saldos)
+// ─────────────────────────────────────────
+function renderDetail(){
+  if(!S.rates){showLoad();return}
+  const rows=processRows(S.raw);
+  const T=aggregate(rows);
+  const {g,catClp,invClp,totClp}=T;
+
+  // Build sorted item list grouped by category
+  // Sort within each category by CLP desc
+  let h=`<table><thead><tr>
+    <th style="min-width:100px">Categoría</th>
+    <th style="text-align:center;width:30px">#</th>
+    <th class="thl" style="min-width:110px">Institución</th>
+    <th style="text-align:center">Per.</th>
+    <th class="thl">Item</th>
+    <th>Monto</th>
+    <th style="text-align:center">Mon.</th>
+    <th>CLP MM</th><th>USD M</th><th>UF</th>
+    <th class="thl" style="min-width:110px">Última act.</th>
+    <th class="thl">Tipo Act.</th>
+  </tr></thead><tbody>`;
+
+  let counter=1;
+  let patriShown=false;
+  const zeroItems=[];  // hide_zeros: collect zero-monto items
+
+  CATS.forEach((cat,idx)=>{
+    const items=g[cat];
+    if(!items||items.length===0) return;
+
+    // Show TOTAL PATRIMONIO INVERSIONES before Casa
+    if((cat==='Casa'||cat==='Créditos Hipotecarios')&&!patriShown){
+      patriShown=true;
+      h+=`<tr class="rp">
+        <td colspan="7">TOTAL PATRIMONIO INVERSIONES</td>
+        <td>${fCLP(invClp)}</td><td>${fUSD(invClp)}</td><td>${fUF(invClp)}</td>
+        <td></td><td></td>
+      </tr>`;
+    }
+
+    // Sort items by abs(clp) desc; separate zero vs non-zero (hide_zeros=true)
+    const nonZero=[...items].filter(it=>it.monto!=null&&parseFloat(it.monto)!==0);
+    const zeros  =[...items].filter(it=>it.monto==null||parseFloat(it.monto)===0);
+    zeros.forEach(it=>zeroItems.push(it));
+
+    if(nonZero.length===0) return; // skip cat if all zero
+
+    nonZero.sort((a,b)=>Math.abs(b.clp)-Math.abs(a.clp));
+    const color=COLORS[cat]||'#666';
+    let firstInCat=true;
+
+    nonZero.forEach(it=>{
+      const neg=it.clp<0;
+      const ta=tipoAct(it);
+      h+=`<tr class="plain">
+        <td>${firstInCat?`<span style="color:${color};font-weight:600;font-size:12px">${cat}</span>`:'&nbsp;'}</td>
+        <td style="text-align:center;color:#6e7681;font-size:11px">${counter++}</td>
+        <td class="tdl">${it.institucion||'—'}</td>
+        <td style="text-align:center">
+          <span class="bdg b${(it.persona||'pn').toLowerCase()}">${it.persona||''}</span>
+        </td>
+        <td class="tdl" style="color:#8b949e;font-style:italic">${it.item||'—'}</td>
+        <td class="${neg?'vn':'vw'}">${fMonto(it.monto,it.moneda)}</td>
+        <td style="text-align:center;color:#6e7681">${it.moneda||'—'}</td>
+        <td class="${neg?'vn':'vw'}">${fCLP(it.clp)}</td>
+        <td class="${neg?'vn':'vw'}">${fUSD(it.clp)}</td>
+        <td class="${neg?'vn':'vw'}">${fUF(it.clp)}</td>
+        <td class="tdl dim" style="font-size:11px">${fmtTs(tsOf(it))}</td>
+        <td class="tdl dim" style="font-size:11px">${ta}</td>
+      </tr>`;
+      firstInCat=false;
+    });
+
+    // Subtotal row (only non-zero items contribute, but total uses all items in cat)
+    const sub=catClp[cat];
+    h+=`<tr class="rs">
+      <td colspan="7">SUBTOTAL ${cat.toUpperCase()}</td>
+      <td>${fCLP(sub)}</td><td>${fUSD(sub)}</td><td>${fUF(sub)}</td>
+      <td></td><td></td>
+    </tr>`;
+  });
+
+  // If no Casa/CH items, show PATRIMONIO here
+  if(!patriShown){
+    h+=`<tr class="rp">
+      <td colspan="7">TOTAL PATRIMONIO INVERSIONES</td>
+      <td>${fCLP(invClp)}</td><td>${fUSD(invClp)}</td><td>${fUF(invClp)}</td>
+      <td></td><td></td>
+    </tr>`;
+  }
+
+  h+=`<tr class="rt">
+    <td colspan="7">TOTAL GENERAL</td>
+    <td>${fCLP(totClp)}</td><td>${fUSD(totClp)}</td><td>${fUF(totClp)}</td>
+    <td></td><td></td>
+  </tr></tbody></table>`;
+
+  // Zero items dim footer (like Python hide_zeros)
+  if(zeroItems.length){
+    const zl=zeroItems.map(it=>`${it.institucion||'?'} / ${it.item||'?'}`).join(' · ');
+    h+=`<div style="padding:8px 14px;font-size:11px;color:#4d5566;border-top:1px solid #21262d">En cero: ${zl}</div>`;
+  }
+
+  document.getElementById('tw').innerHTML=h;
+  renderSanity(rows,T);
+}
+
+// ─────────────────────────────────────────
+// VIEW: CAJA — Activos y Pasivos CP
+// show_caja() replica
+// ─────────────────────────────────────────
+function renderCaja(){
+  if(!S.rates){showLoad();return}
+  const rows=processRows(S.raw,'todos');
+
+  const usd=S.rates.usd, uf=S.rates.uf;
+  const activos=[], pasivos=[];
+  let totalActivos=0, totalPasivos=0;
+
+  rows.forEach(r=>{
+    // Use r.cat (computed by catToShort via processRows) — matches Python's cat_to_short output
+    const is_cash = r.cat==='Cash';
+    const inst=r.institucion||'', item=r.item||'', pers=r.persona||'';
+    const stKey=inst+'|'+item;
+    // SHORT_TERM_INV: match Python's SHORT_TERM_INVESTMENTS set
+    // "Itaú PJ" in catalog maps to DB inst="Itaú" + persona="PJ"
+    const is_short = SHORT_TERM_INV.has(stKey)
+      || ((inst==='Itaú'||inst==='Itaú PJ')&&item==='CFIETFCD'&&pers==='PJ');
+    const isTdc = item.includes('TdC')||(r.categoria||'').includes('TdC');
+    const isLdc = item.includes('LdC')||(r.categoria||'').includes('LdC');
+    const clp=r.clp;
+    if((is_cash||is_short)&&clp>0){
+      activos.push(r);
+      totalActivos+=clp;
+    } else if((isTdc||isLdc)&&clp<0){
+      pasivos.push(r);
+      totalPasivos+=clp;
+    }
+  });
+
+  activos.sort((a,b)=>b.clp-a.clp);
+  pasivos.sort((a,b)=>a.clp-b.clp);
+
+  const cfg=S.config;
+  const safety_cash=cfg.safety_cash;
+  const prov_inv=cfg.prov_inversion;
+  const tol=cfg.tolerance;
+  const total_provisiones=safety_cash+prov_inv;
+  const liq_bruta=totalActivos+totalPasivos;
+  const total_pasivos_calc=totalPasivos+total_provisiones;
+  const liq_neta=totalActivos+total_pasivos_calc;
+  const abs_p=Math.abs(total_pasivos_calc);
+  const ratio=abs_p!==0?(liq_neta/abs_p)*100:0;
+  const dispo_neto=liq_neta-(tol/100)*abs_p;
+
+  function fclp(v){
+    if(v===0) return '<span class="dim">—</span>';
+    const neg=v<0;
+    const s=fi(Math.abs(v));
+    return `<span class="${neg?'vn':'vp'}">${neg?'-':''}${s}</span>`;
+  }
+  function fclpB(v,extraClass=''){
+    if(v===0) return '<span class="dim">—</span>';
+    const neg=v<0;
+    const s=fi(Math.abs(v));
+    return `<span class="${neg?'vn':'vp'} ${extraClass}">${neg?'-':''}${s}</span>`;
+  }
+
+  // ── helpers para tabla compacta ──
+  function cajaRows(list, cls){
+    return list.map(r=>`<tr>
+      <td><span class="ci">${r.institucion||'—'}</span><br><span class="cs">${r.item||''} · ${r.persona||''}</span></td>
+      <td class="cv ${cls}">${fi(Math.abs(r.clp))}</td>
+      <td class="cm">${fmtTs(tsOf(r))}</td>
+    </tr>`).join('');
+  }
+
+  const ratio_str=(ratio>=0?'+':'')+ratio.toFixed(2).replace('.',',')+'%';
+
+  // BARRA RESUMEN — va ARRIBA de la tabla
+  const lbC=liq_bruta>=0?'vp':'vn';
+  const lnC=liq_neta>=0?'vp':'vn';
+  const dnC=dispo_neto>=0?'vp':'vn';
+  let h=`<div class="caja-bar" style="grid-template-columns:repeat(4,1fr);margin-bottom:12px">
+    <div class="caja-metric">
+      <div class="cm-label">Liquidez Bruta</div>
+      <div class="cm-val ${lbC}">${liq_bruta<0?'-':''}${fi(Math.abs(liq_bruta))}</div>
+    </div>
+    <div class="caja-metric">
+      <div class="cm-label" style="color:#7c83fd">Liquidez Neta</div>
+      <div class="cm-val ${lnC}">${liq_neta<0?'-':''}${fi(Math.abs(liq_neta))}</div>
+    </div>
+    <div class="caja-metric">
+      <div class="cm-label" style="color:#7c83fd">Ratio Neto</div>
+      <div class="cm-val ${lnC}">${ratio_str}</div>
+    </div>
+    <div class="caja-metric">
+      <div class="cm-label">Disponible (tol. ${tol}%)</div>
+      <div class="cm-val ${dnC}">${dispo_neto<0?'-':''}${fi(Math.abs(dispo_neto))}</div>
+    </div>
+  </div>`;
+
+  h+=`<div class="caja-grid">`;
+
+  // COL ACTIVOS
+  h+=`<div class="caja-col">
+    <div class="caja-head" style="color:#3fb950">Activos Corto Plazo</div>
+    <table><tbody>
+      ${cajaRows(activos,'vp')}
+      <tr class="caja-subtotal">
+        <td style="color:#3fb950">Subtotal</td>
+        <td class="cv" style="color:#3fb950">${fi(totalActivos)}</td>
+        <td></td>
+      </tr>
+    </tbody></table>
+  </div>`;
+
+  // COL PASIVOS (incluye provisiones como filas)
+  const provRows=(safety_cash!==0?`<tr>
+    <td><span class="ci">Safety Cash</span><br><span class="cs">Reserva</span></td>
+    <td class="cv vw">${fi(Math.abs(safety_cash))}</td><td></td>
+  </tr>`:'')+
+  (prov_inv!==0?`<tr>
+    <td><span class="ci">Provisión</span><br><span class="cs">Reserva</span></td>
+    <td class="cv vw">${fi(Math.abs(prov_inv))}</td><td></td>
+  </tr>`:'');
+
+  h+=`<div class="caja-col">
+    <div class="caja-head" style="color:#f85149">Obligaciones Corto Plazo</div>
+    <table><tbody>
+      ${cajaRows(pasivos,'vn')}
+      ${provRows}
+      <tr class="caja-subtotal">
+        <td style="color:#f85149">Subtotal</td>
+        <td class="cv" style="color:#f85149">${fi(Math.abs(total_pasivos_calc))}</td>
+        <td></td>
+      </tr>
+    </tbody></table>
+  </div>`;
+
+  h+=`</div>`; // caja-grid
+
+
+  document.getElementById('tw').innerHTML=h;
+}
+
+// ─────────────────────────────────────────
+// VIEW: CUPOS TdC (show_cupos_tdc replica)
+// Cupos stored in localStorage
+// ─────────────────────────────────────────
+function renderCupos(){
+  if(!S.rates){showLoad();return}
+  const rows=processRows(S.raw,'todos');
+
+  // TdC items = items whose cat is 'Fondos líquidos' with TdC in item name
+  // Actually: TdC items come from catalog with cat='TdC'
+  // From Supabase rows, TdC items have 'TdC' in item or categoria
+  const tdc=rows.filter(r=>(r.item||'').includes('TdC')||(r.categoria||'').includes('TdC'));
+
+  if(tdc.length===0){
+    document.getElementById('tw').innerHTML=`<div class="sb"><div style="font-size:28px">💳</div><div>Sin tarjetas de crédito detectadas</div></div>`;
+    return;
+  }
+
+  // Sort by deuda (abs) desc
+  tdc.sort((a,b)=>Math.abs(b.clp)-Math.abs(a.clp));
+
+  let totalDeuda=0, totalCupo=0;
+
+  let h=`<table><thead><tr>
+    <th class="thl">Institución</th>
+    <th class="thl">Tarjeta</th>
+    <th>Deuda</th>
+    <th>Cupo</th>
+    <th>Disponible</th>
+    <th>% Disponible</th>
+    <th class="thl">Última act.</th>
+  </tr></thead><tbody>`;
+
+  tdc.forEach(r=>{
+    const key=r.institucion+'|'+r.item;
+    const deuda=Math.abs(r.clp);
+    const cupo=+(S.cupos[key]||0);
+    const disp=cupo-deuda;
+    const pct=cupo>0?(disp/cupo*100):0;
+    totalDeuda+=deuda;
+    totalCupo+=cupo;
+    const dc=disp>0?'vp':disp<0?'vn':'vw';
+    const pc=pct>0?'vp':pct<0?'vn':'vw';
+    h+=`<tr class="plain">
+      <td class="tdl">${r.institucion||'—'}</td>
+      <td class="tdl" style="color:#8b949e">${r.item||'—'}</td>
+      <td class="vn">${deuda>0?fi(deuda):'—'}</td>
+      <td>${cupo>0?fi(cupo):'—'}</td>
+      <td class="${dc}">${cupo>0?(disp>=0?'':'-')+fi(Math.abs(disp)):'—'}</td>
+      <td class="${pc}">${cupo>0?Math.round(pct)+'%':'—'}</td>
+      <td class="tdl dim" style="font-size:11px">${fmtTs(tsOf(r))}</td>
+    </tr>`;
+  });
+
+  const totalDisp=totalCupo-totalDeuda;
+  const totalPct=totalCupo>0?(totalDisp/totalCupo*100):0;
+  const tdc2=totalDisp>0?'vp':totalDisp<0?'vn':'vw';
+  const tpc=totalPct>0?'vp':totalPct<0?'vn':'vw';
+  h+=`<tr class="rt">
+    <td class="tdl">TOTAL</td><td></td>
+    <td>${fi(totalDeuda)}</td>
+    <td>${totalCupo>0?fi(totalCupo):'—'}</td>
+    <td class="${tdc2}">${totalCupo>0?(totalDisp>=0?'':'-')+fi(Math.abs(totalDisp)):'—'}</td>
+    <td class="${tpc}">${totalCupo>0?Math.round(totalPct)+'%':'—'}</td>
+    <td></td>
+  </tr></tbody></table>`;
+
+  document.getElementById('tw').innerHTML=h;
+}
+
+function saveCupo(key,val){
+  const v=parseFloat((val||'').replace(/\./g,'').replace(',','.'))||0;
+  S.cupos[key]=v;
+  localStorage.setItem('chirafin_cupos',JSON.stringify(S.cupos));
+}
+
+// ─────────────────────────────────────────
+// VIEW: PAGOS TdC (show_pagos_tdc replica)
+// Reads pagos_tdc from Supabase
+// ─────────────────────────────────────────
+async function renderPagos(){
+  if(S.pagos===null){
+    document.getElementById('tw').innerHTML=`<div class="sb"><div class="spin"></div><div>Cargando pagos TdC…</div></div>`;
+    try{
+      S.pagos=await getPagos();
+    }catch(e){
+      document.getElementById('tw').innerHTML=`<div class="info-box">⚠️ No se pudo cargar la tabla pagos_tdc desde Supabase.<br><small style="color:#6e7681">Los pagos de tarjetas se registran localmente mediante el script Python.</small></div>`;
+      return;
+    }
+  }
+
+  const rows=S.pagos;
+  if(!rows||rows.length===0){
+    document.getElementById('tw').innerHTML=`<div class="info-box">Sin datos de pagos TdC.<br><small style="color:#6e7681">Ejecuta el script Python para registrar pagos de tarjetas.</small></div>`;
+    return;
+  }
+
+  // Dedup: latest per (institucion, card_number)
+  const latest={};
+  rows.forEach(r=>{
+    const k=(r.institucion||'')+'|'+(r.card_number||'');
+    if(!latest[k]||r.timestamp>latest[k].timestamp) latest[k]=r;
+  });
+  const data=Object.values(latest);
+
+  // Classify: pendientes vs al_dia
+  const MESES=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  function fdate(s){
+    if(!s) return '—';
+    try{
+      const d=new Date(s.replace(/(\d{2})\/(\d{2})\/(\d{4})/,'$3-$2-$1'));
+      return `${String(d.getDate()).padStart(2,'0')}-${MESES[d.getMonth()]}`;
+    }catch(e){return s.slice(0,8)||'—'}
+  }
+  function fclp2(n){if(!n||n===0) return '—'; return fi(Math.round(+n));}
+  function fusd(n){if(!n||n===0) return '—'; return (+n).toFixed(2);}
+
+  const pendientes=[], al_dia=[];
+  data.forEach(r=>{
+    const paid_clp=r.pagado_clp!=null?+r.pagado_clp:(+r.no_facturado_clp||0);
+    const paid_usd=+(r.pagado_usd||0);
+    const delta_clp=(+(r.facturado_clp||0))-paid_clp;
+    const delta_usd=(+(r.facturado_usd||0))-paid_usd;
+    const entry={...r, paid_clp, paid_usd, delta_clp, delta_usd};
+    if(delta_clp>0||delta_usd>0) pendientes.push(entry);
+    else al_dia.push(entry);
+  });
+  pendientes.sort((a,b)=>(a.pagar_hasta||'').localeCompare(b.pagar_hasta||''));
+  al_dia.sort((a,b)=>(a.pagar_hasta||'').localeCompare(b.pagar_hasta||''));
+
+  function makeTable(title,entries,color){
+    if(!entries.length) return '';
+    let t=`<div style="margin-bottom:14px"><div style="padding:8px 14px;background:#21262d;font-weight:700;color:${color};font-size:12px;border-radius:10px 10px 0 0;border:1px solid #30363d;border-bottom:none">${title}</div>
+    <div class="tw" style="border-radius:0 0 10px 10px"><table><thead><tr>
+      <th class="thl">Banco</th><th class="thl">Tarjeta</th>
+      <th>Facturado</th><th>Fac. CLP</th><th>Fac. USD</th>
+      <th>Pag. CLP</th><th>Pag. USD</th>
+      <th>Δ CLP</th><th>Δ USD</th>
+      <th>Pagar hasta</th><th class="thl">Actualizado</th>
+    </tr></thead><tbody>`;
+    entries.forEach(r=>{
+      const cc=r.delta_clp>0?'vn':'vp';
+      const cu=r.delta_usd>0?'vn':'vp';
+      t+=`<tr class="plain">
+        <td class="tdl">${r.institucion||'—'}</td>
+        <td class="tdl" style="color:#8b949e">${(r.card_name||'Visa')+' '+r.card_number}</td>
+        <td class="dim">${fdate(r.periodo_hasta)}</td>
+        <td class="vw">${fclp2(r.facturado_clp)}</td>
+        <td class="vw">${fusd(r.facturado_usd)}</td>
+        <td class="dim">${fclp2(r.paid_clp)}</td>
+        <td class="dim">${fusd(r.paid_usd)}</td>
+        <td class="${cc}">${fclp2(r.delta_clp)}</td>
+        <td class="${cu}">${fusd(r.delta_usd)}</td>
+        <td class="dim">${fdate(r.pagar_hasta)}</td>
+        <td class="tdl dim" style="font-size:11px">${fmtTs(r.timestamp)}</td>
+      </tr>`;
+    });
+    t+=`</tbody></table></div></div>`;
+    return t;
+  }
+
+  document.getElementById('tw').innerHTML=
+    makeTable('PENDIENTES', pendientes, '#f85149')+
+    makeTable('AL DÍA', al_dia, '#3fb950');
+}
+
+// ─────────────────────────────────────────
+// VIEW: COMPARAR FECHAS (show_comparison)
+// ─────────────────────────────────────────
+function renderComparar(){
+  const comp=S.comp;
+  const dates_el=document.getElementById('availDates');
+  const dates_list=window._allDates||[];
+
+  const html_form=()=>{
+    const dOpts=dates_list.map(d=>`<option value="${d}">${d}</option>`).join('');
+    return `<div class="comp-form">
+      <span style="font-size:12px;font-weight:600;color:#8b949e;text-transform:uppercase;letter-spacing:.5px">Fecha Base:</span>
+      <select id="compA" style="background:#21262d;border:1px solid #30363d;color:#e6edf3;padding:5px 10px;border-radius:6px;font-size:12px">
+        ${dOpts}
+      </select>
+      <span style="font-size:12px;font-weight:600;color:#8b949e;text-transform:uppercase;letter-spacing:.5px">Fecha Compare:</span>
+      <select id="compB" style="background:#21262d;border:1px solid #30363d;color:#e6edf3;padding:5px 10px;border-radius:6px;font-size:12px">
+        ${dOpts}
+      </select>
+      <button class="btn" onclick="runComparar()" style="border-color:#7c83fd;color:#7c83fd">Comparar →</button>
+      <div class="comp-mode">
+        <button class="comp-mode-btn" onclick="compQuick('prev')">vs Anterior</button>
+        <button class="comp-mode-btn" onclick="compQuick('oldest')">vs Más Antigua</button>
+      </div>
+      <div class="tabs" style="margin-left:auto" id="compUnitTabs">
+        <button class="tab sub ${S.compUnit==='clp'?'on':''}" onclick="setCompUnit('clp')">CLP MM</button>
+        <button class="tab sub ${S.compUnit==='usd'?'on':''}" onclick="setCompUnit('usd')">USD M</button>
+        <button class="tab sub ${S.compUnit==='uf'?'on':''}" onclick="setCompUnit('uf')">UF</button>
+      </div>
+    </div>`;
+  };
+
+  if(!window._allDates||window._allDates.length<2){
+    document.getElementById('tw').innerHTML=`<div class="sb"><div class="spin"></div><div>Cargando fechas…</div></div>`;
+    getDates().then(ds=>{
+      window._allDates=ds.map(d=>d.fecha).sort((a,b)=>b.localeCompare(a));
+      renderComparar();
+    }).catch(()=>{
+      document.getElementById('tw').innerHTML=`<div class="info-box">No hay suficientes datos históricos para comparar.</div>`;
+    });
+    return;
+  }
+
+  if(!comp.snapA||!comp.snapB){
+    document.getElementById('tw').innerHTML=html_form();
+    // Set defaults
+    const sel=window._allDates;
+    setTimeout(()=>{
+      const a=document.getElementById('compA');
+      const b=document.getElementById('compB');
+      if(a&&sel.length>1){ a.value=sel[1]; }
+      if(b&&sel.length>0){ b.value=sel[0]; }
+    },0);
+    return;
+  }
+
+  // Build comparison table
+  const {snapA,snapB,ratesA,ratesB,dateA,dateB}=comp;
+  const rToday=S.rates;
+
+  // Build catalog key set — ONLY auto+manual items, NOT historial.
+  // Python's _get_unified_catalog_list() excludes historial-only Supabase rows (stale/deleted items).
+  // Including historial rows (TQQQ, ARKF, ITOT, old AFC name, etc.) would add ~29 MM that Python excludes.
+  const catKeys=new Set(
+    S.raw
+      .filter(r=>r.source!=='historial')
+      .map(r=>(r.institucion||'')+'|'+(r.item||'')+'|'+(r.persona||''))
+  );
+  // Map key → current category (for overriding stale snapshot categories)
+  // Python uses _get_unified_catalog_list() categories (current) even when looking up historical values.
+  // e.g. CH New was "TdC" in 2025-05-08 snapshot, but current catalog has "Propiedades de Inversión".
+  const currentCatMap={};
+  S.raw.filter(r=>r.source!=='historial').forEach(r=>{
+    const k=(r.institucion||'')+'|'+(r.item||'')+'|'+(r.persona||'');
+    if(!currentCatMap[k]) currentCatMap[k]=r.categoria;
+  });
+  function filterSnap(snap){
+    // Keep only rows that are in the current active catalog (auto+manual, not stale historial)
+    return snap.filter(r=>catKeys.has((r.institucion||'')+'|'+(r.item||'')+'|'+(r.persona||'')));
+  }
+  function buildCatData(snap){
+    // Always 'todos' — comparison shows all personas like Python's show_comparison()
+    // allowHistorial=true: snapshot rows have source='historial', must NOT be filtered out by processRows
+    // Override snapshot categoria with current catalog categoria (matches Python's behavior: uses current
+    // catalog categories even when fetching historical values from DB)
+    const filtered=filterSnap(snap).map(r=>{
+      const k=(r.institucion||'')+'|'+(r.item||'')+'|'+(r.persona||'');
+      const curCat=currentCatMap[k];
+      return curCat ? {...r, categoria:curCat} : r;
+    });
+    const rows=processRows(filtered,'todos',rToday,true);
+    return aggregate(rows);
+  }
+  const TA=buildCatData(snapA);
+  const TB=buildCatData(snapB);
+
+  const dtA=new Date(dateA), dtB=new Date(dateB);
+  const days=Math.max(1,(dtB-dtA)/864e5);
+  const months=Math.max(1/30.44,days/30.44);
+
+  function lbl(d){
+    const dt=new Date(d);
+    const m=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'][dt.getUTCMonth()];
+    return `${String(dt.getUTCDate()).padStart(2,'0')} ${m} ${dt.getUTCFullYear()}`;
+  }
+  const labA=lbl(dateA), labB=lbl(dateB);
+  // Match Python: months<12 → 1 decimal, ≥12 → integer
+  const mVal=months<12?Math.round(months*10)/10:Math.round(months);
+  let time_label=days<31?`${days} días`:`${mVal} meses (${days} días)`;
+
+  function fv(v){ if(!v&&v!==0) return '<span class="dim">—</span>'; const r=Math.round(v); return `<span class="${r<0?'vn':r>0?'':'dim'}">${fi(r)}</span>`; }
+  function fd(v, bold=false, dec=1){
+    if(v===null||v===undefined) return '<span class="dim">—</span>';
+    if(Math.abs(v)<1e-9) return '<span class="dim">0</span>';
+    const s=v>=0?'+':'';
+    const pref=bold?'font-weight:700;':'';
+    const col=v>0?'#3fb950':v<0?'#f85149':'#6e7681';
+    const fmt=dec>0?v.toLocaleString('es-CL',{minimumFractionDigits:dec,maximumFractionDigits:dec}):fi(v);
+    return `<span style="${pref}color:${col}">${s}${fmt}</span>`;
+  }
+  function fdPct(v, bold=false){
+    if(v===null||isNaN(v)) return '<span class="dim">—</span>';
+    const s=v>=0?'+':'';
+    const col=v>0?'#3fb950':v<0?'#f85149':'#6e7681';
+    const pref=bold?'font-weight:700;':'';
+    return `<span style="${pref}color:${col}">${s}${v.toFixed(1).replace('.',',')}%</span>`;
+  }
+
+  function buildSection(key, label, unit){
+    let s=`<tr class="rh"><td colspan="8"> ${label} </td></tr>`;
+    let totA=0,totB=0,patA=0,patB=0;
+
+    CATS.forEach(cat=>{
+      const ca=TA.catClp[cat]||0, cb=TB.catClp[cat]||0;
+      // Scale values
+      let va=ca,vb=cb;
+      if(unit==='usd'){ va=ca/(rToday?.usd||1)/1e3; vb=cb/(rToday?.usd||1)/1e3; }
+      else if(unit==='uf'){ va=ca/(rToday?.uf||1); vb=cb/(rToday?.uf||1); }
+      else { va=ca/1e6; vb=cb/1e6; }
+      totA+=va; totB+=vb;
+      if(cat!=='Casa'){ patA+=va; patB+=vb; } // excluye solo Casa — CH sí entra en patrimonio (igual que Python)
+    });
+
+    let patriShown=false;
+    CATS.forEach(cat=>{
+      const ca=TA.catClp[cat]||0, cb=TB.catClp[cat]||0;
+      let va=ca,vb=cb;
+      if(unit==='usd'){ va=ca/(rToday?.usd||1)/1e3; vb=cb/(rToday?.usd||1)/1e3; }
+      else if(unit==='uf'){ va=ca/(rToday?.uf||1); vb=cb/(rToday?.uf||1); }
+      else { va=ca/1e6; vb=cb/1e6; }
+      const d=vb-va;
+      const dPct=va!==0?d/Math.abs(va)*100:null;
+      const dDia=d/days;
+      const dMes=d/months;
+      const dAnual=va!==0?(d/days*365)/Math.abs(va)*100:null;
+
+      if(cat==='Casa'&&!patriShown){
+        patriShown=true;
+        const dp=patB-patA;
+        const dpp=patA!==0?dp/Math.abs(patA)*100:null;
+        const dAnualPat=patA!==0?(dp/days*365)/Math.abs(patA)*100:null;
+        s+=`<tr class="rp"><td class="tdl" style="padding-left:16px">TOTAL PATRIMONIO</td>
+          <td>${fv(patA)}</td><td>${fv(patB)}</td>
+          <td>${fd(dp,true)}</td><td>${fdPct(dpp,true)}</td>
+          <td>${fd(dp/days,false)}</td><td>${fd(dp/months,false)}</td>
+          <td>${fdPct(dAnualPat,true)}</td>
+        </tr>`;
+      }
+      // Skip categories with no data in either snapshot (matches Python: if cat not in cat_data: continue)
+      if(va===0&&vb===0) return;
+      s+=`<tr class="plain"><td class="tdl" style="padding-left:20px;color:#8b949e">${cat}</td>
+        <td>${fv(va)}</td><td>${fv(vb)}</td>
+        <td>${fd(d)}</td><td>${fdPct(dPct)}</td>
+        <td>${fd(dDia,false)}</td><td>${fd(dMes,false)}</td>
+        <td>${fdPct(dAnual)}</td>
+      </tr>`;
+    });
+
+    if(!patriShown){
+      const dp=patB-patA;
+      const dpp=patA!==0?dp/Math.abs(patA)*100:null;
+      const dAnualPat=patA!==0?(dp/days*365)/Math.abs(patA)*100:null;
+      s+=`<tr class="rp"><td class="tdl" style="padding-left:16px">TOTAL PATRIMONIO</td>
+        <td>${fv(patA)}</td><td>${fv(patB)}</td>
+        <td>${fd(dp,true)}</td><td>${fdPct(dpp,true)}</td>
+        <td>${fd(dp/days)}</td><td>${fd(dp/months)}</td>
+        <td>${fdPct(dAnualPat)}</td>
+      </tr>`;
+    }
+
+    const dg=totB-totA;
+    const dgp=totA!==0?dg/Math.abs(totA)*100:null;
+    const dgAnual=totA!==0?(dg/days*365)/Math.abs(totA)*100:null;
+    s+=`<tr class="rt"><td class="tdl">TOTAL GENERAL</td>
+      <td>${fv(totA)}</td><td>${fv(totB)}</td>
+      <td>${fd(dg,true)}</td><td>${fdPct(dgp,true)}</td>
+      <td>${fd(dg/days)}</td><td>${fd(dg/months)}</td>
+      <td>${fdPct(dgAnual)}</td>
+    </tr>`;
+
+    return s;
+  }
+
+  const unitCfg={clp:{key:'clp',label:'CLP MM',unit:'clp'},usd:{key:'usd',label:'USD M',unit:'usd'},uf:{key:'uf',label:'UF',unit:'uf'}};
+  const uc=unitCfg[S.compUnit]||unitCfg.clp;
+
+  let h=html_form();
+  h+=`<div style="text-align:center;padding:8px;font-size:12px;color:#8b949e">
+    Comparativa: <strong style="color:#e6edf3">${labA}</strong> vs <strong style="color:#e6edf3">${labB}</strong>
+    &nbsp;·&nbsp; Período: ${time_label}
+    &nbsp;·&nbsp; Tasas: hoy (USD ${fi(rToday?.usd||0)} / UF ${fi(rToday?.uf||0)})
+  </div>
+  <div class="tw"><table><thead><tr>
+    <th class="thl" style="min-width:160px">Categoría</th>
+    <th>${labA}</th><th>${labB}</th>
+    <th>Δ</th><th>Δ%</th><th>Δ/día</th><th>Δ/mes</th><th>Δ% Anual</th>
+  </tr></thead><tbody>`;
+  h+=buildSection(uc.key,uc.label,uc.unit);
+
+  // TIPOS DE CAMBIO — historical rates per date (matches Python's last section)
+  const rA=comp.ratesA, rB=comp.ratesB;
+  if(rA&&rB){
+    function fxRow(label, va, vb){
+      const d=vb-va, pct=va?d/va*100:null;
+      return `<tr class="plain"><td class="tdl" style="padding-left:20px;color:#8b949e">${label}</td>
+        <td>${fv(va)}</td><td>${fv(vb)}</td>
+        <td>${fd(d)}</td><td>${fdPct(pct)}</td>
+        <td>${fd(d/days)}</td><td>${fd(d/months)}</td>
+        <td>${fdPct(va?(d/days*365)/va*100:null)}</td>
+      </tr>`;
+    }
+    h+=`<tr class="rh"><td colspan="8"> TIPOS DE CAMBIO </td></tr>`;
+    h+=fxRow('USD CLP', rA.usd||0, rB.usd||0);
+    h+=fxRow('UF CLP',  rA.uf||0,  rB.uf||0);
+  }
+
+  h+=`</tbody></table></div>`;
+
+  // Set current selects
+  document.getElementById('tw').innerHTML=h;
+  setTimeout(()=>{
+    const a=document.getElementById('compA');
+    const b=document.getElementById('compB');
+    if(a) a.value=comp.dateA;
+    if(b) b.value=comp.dateB;
+  },0);
+}
+
+async function _loadComp(dA,dB){
+  document.getElementById('tw').innerHTML=`<div class="sb"><div class="spin"></div><div>Cargando snapshots…</div></div>`;
+  const [snapA,snapB,rA,rB]=await Promise.all([getSnap(dA),getSnap(dB),getRatesD(dA),getRatesD(dB)]);
+  S.comp={dateA:dA,dateB:dB,snapA,snapB,ratesA:rA,ratesB:rB};
+  renderComparar();
+}
+
+async function runComparar(){
+  const a=document.getElementById('compA')?.value;
+  const b=document.getElementById('compB')?.value;
+  if(!a||!b){ return; }
+  let dA=a, dB=b;
+  if(dA>dB){[dA,dB]=[dB,dA];}
+  try{ await _loadComp(dA,dB); }
+  catch(e){ document.getElementById('tw').innerHTML=`<div class="info-box">Error: ${e.message}</div>`; }
+}
+
+async function compQuick(mode){
+  const dates=window._allDates||[];
+  if(dates.length<2) return;
+  let dA,dB;
+  if(mode==='prev'){ dA=dates[1]; dB=dates[0]; }
+  else { dA=dates[dates.length-1]; dB=dates[0]; }
+  document.getElementById('tw').innerHTML=`<div class="sb"><div class="spin"></div><div>Cargando snapshots…</div></div>`;
+  try{ await _loadComp(dA,dB); }
+  catch(e){ document.getElementById('tw').innerHTML=`<div class="info-box">Error: ${e.message}</div>`; }
+}
+
+// ─────────────────────────────────────────
+// SANITY CHECKS — profundo
+// ─────────────────────────────────────────
+function renderSanity(rows,T){
+  const raw=S.raw;
+  const usd=S.rates?.usd||1, uf=S.rates?.uf||1;
+
+  // ── Pre-process raw for full audit ──
+  const histN=raw.filter(r=>r.source==='historial').length;
+  const noHistAll=raw.filter(r=>r.source!=='historial');
+  const allDedup=dedup(noHistAll);
+  const droppedByDedup=noHistAll.filter(r=>{
+    if(r.source!=='auto') return false;
+    const k=(r.item||'')+'|'+(r.persona||'')+'|'+(r.moneda||'');
+    return noHistAll.some(m=>m.source==='manual'&&(m.item||'')+'|'+(m.persona||'')+'|'+(m.moneda||'')===k);
+  });
+  const {catClp,invClp,totClp,other}=T;
+
+  const L=[];
+  const sep=(n=64)=>L.push('─'.repeat(n));
+  const hdr=s=>L.push(`\n╔══ ${s} ${'═'.repeat(Math.max(0,56-s.length))}╗`);
+
+  hdr('CHIRAFIN SANITY CHECKS');
+  sep();
+
+  // ── [1] PIPELINE DE DATOS ──
+  L.push('[1] PIPELINE DE DATOS');
+  L.push(`    Registros brutos en Supabase  : ${raw.length}`);
+  L.push(`    → source=historial (descartados): ${histN}`);
+  L.push(`    → Tras filtrar historial        : ${noHistAll.length}`);
+  L.push(`    → Descartados por dedup (auto≤manual): ${droppedByDedup.length}`);
+  if(droppedByDedup.length){
+    droppedByDedup.forEach(r=>L.push(`       ⚠️ DROP auto: ${r.institucion}/${r.item} (${r.persona},${r.moneda}) monto=${r.monto}`));
+  }
+  L.push(`    → Tras dedup                    : ${allDedup.length}`);
+  L.push(`    → Filtro persona [${S.persona}]          : ${rows.length}`);
+  L.push(`    → Con monto=0                   : ${rows.filter(r=>!r.monto||parseFloat(r.monto)===0).length}`);
+  L.push(`    → Con monto≠0                   : ${rows.filter(r=>r.monto&&parseFloat(r.monto)!==0).length}`);
+  sep();
+
+  // ── [2] TIPOS DE CAMBIO ──
+  L.push('[2] TIPOS DE CAMBIO');
+  if(S.rates){
+    L.push(`    date : ${S.rates.date}`);
+    L.push(`    USD  : ${S.rates.usd.toLocaleString('es-CL')} CLP`);
+    L.push(`    UF   : ${S.rates.uf.toLocaleString('es-CL')} CLP`);
+  } else L.push('    ⚠️ TASAS NO CARGADAS');
+  sep();
+
+  // ── [3] MAPA CATEGORÍAS (cat_raw → cat_short) ──
+  L.push('[3] MAPA CATEGORÍAS (todas las filas tras dedup)');
+  const catMap={};
+  allDedup.forEach(r=>{
+    const cs=catToShort(r.categoria||'',r.institucion||'',r.item||'');
+    const k=(r.categoria||'—')+' → '+cs;
+    catMap[k]=(catMap[k]||0)+1;
+  });
+  Object.entries(catMap).sort((a,b)=>a[0].localeCompare(b[0])).forEach(([k,n])=>{
+    const ok=CATS.includes(k.split(' → ')[1]);
+    L.push(`    ${ok?'✓':'⚠️'} ${k.padEnd(55)} (n=${n})`);
+  });
+  if(other.length){
+    L.push(`    ⚠️ Sin categoría reconocida: n=${other.length}`);
+    other.forEach(r=>L.push(`       "${r.institucion}" | cat="${r.categoria}" | item="${r.item}" → "${r.cat}"`));
+  } else L.push('    ✓ Todos los ítems en CAT_ORDER');
+  sep();
+
+  // ── [4] RESUMEN POR CATEGORÍA ──
+  L.push('[4] RESUMEN POR CATEGORÍA');
+  L.push(`    ${'Categoría'.padEnd(34)} ${'n'.padStart(3)} ${'CLP MM'.padStart(7)} ${'USD M'.padStart(6)} ${'UF'.padStart(7)} ${'%'.padStart(6)}`);
+  L.push('    ' + '─'.repeat(68));
+  CATS.forEach(cat=>{
+    const clp=catClp[cat]||0, n=(T.g[cat]||[]).length;
+    const nNZ=(T.g[cat]||[]).filter(r=>r.monto&&parseFloat(r.monto)!==0).length;
+    const pct=totClp?clp/totClp*100:0;
+    if(n===0) return;
+    L.push(`    ${cat.padEnd(34)} ${String(n).padStart(3)} ${String(Math.round(clp/1e6)).padStart(7)} ${String(Math.round(clp/usd/1e3)).padStart(6)} ${String(Math.round(clp/uf)).padStart(7)} ${pct.toFixed(1).padStart(5)}%  (${nNZ}≠0)`);
+  });
+  L.push('    ' + '─'.repeat(68));
+  L.push(`    ${'TOTAL PATRIMONIO'.padEnd(34)} ${' '.padStart(3)} ${String(Math.round(invClp/1e6)).padStart(7)} ${String(Math.round(invClp/usd/1e3)).padStart(6)} ${String(Math.round(invClp/uf)).padStart(7)}`);
+  L.push(`    ${'TOTAL GENERAL'.padEnd(34)} ${' '.padStart(3)} ${String(Math.round(totClp/1e6)).padStart(7)} ${String(Math.round(totClp/usd/1e3)).padStart(6)} ${String(Math.round(totClp/uf)).padStart(7)}`);
+  sep();
+
+  // ── [5] DETALLE POR ÍTEM (todos los no-historial) ──
+  L.push('[5] DETALLE POR ÍTEM (monto≠0, filtro persona=todos)');
+  const allRowsFull=processRows(noHistAll,'todos');
+  const nonZeroFull=allRowsFull.filter(r=>r.monto&&parseFloat(r.monto)!==0);
+  nonZeroFull.sort((a,b)=>{
+    const ci=CATS.indexOf(a.cat), cj=CATS.indexOf(b.cat);
+    return ci!==cj?ci-cj:Math.abs(b.clp)-Math.abs(a.clp);
+  });
+  let lastCat='';
+  nonZeroFull.forEach(r=>{
+    if(r.cat!==lastCat){ L.push(`    [${r.cat}]`); lastCat=r.cat; }
+    const clpMM=(r.clp/1e6).toFixed(2);
+    const src=r.source==='manual'?'✏️':r.source==='auto'?'🤖':'🏷️';
+    L.push(`    ${src} ${(r.institucion||'?').padEnd(20)} ${(r.item||'?').padEnd(22)} ${(r.persona||'?').padEnd(3)} ${(r.moneda||'?').padEnd(3)} monto=${String(r.monto).padStart(14)} → ${clpMM} MM CLP`);
+  });
+  sep();
+
+  // ── [6] SUMA DE PORCENTAJES ──
+  L.push('[6] VERIFICACIÓN SUMA % (debe = 100%)');
+  let pSum=0;
+  CATS.forEach(cat=>{
+    const clp=catClp[cat]||0;
+    const p=totClp?clp/totClp*100:0;
+    pSum+=p;
+    if((T.g[cat]||[]).length>0)
+      L.push(`    ${cat.padEnd(34)} ${p.toFixed(2).padStart(7)}%`);
+  });
+  const ok100=Math.abs(pSum-100)<0.1;
+  L.push(`    ${'SUMA TOTAL'.padEnd(34)} ${pSum.toFixed(2).padStart(7)}%  ${ok100?'✓ OK':'⚠️ ERROR — no cierra en 100%'}`);
+  sep();
+
+  // ── [7] ÍTEMS EN CERO ──
+  const zeroRows=allDedup.filter(r=>!r.monto||parseFloat(r.monto)===0);
+  L.push(`[7] ÍTEMS EN CERO (n=${zeroRows.length}) — excluidos de tabla completa`);
+  zeroRows.sort((a,b)=>(a.institucion||'').localeCompare(b.institucion||'')).forEach(r=>{
+    L.push(`    • ${(r.institucion||'?').padEnd(22)} ${(r.item||'?').padEnd(22)} ${r.persona||'?'} ${r.moneda||'?'} [${r.source}]`);
+  });
+  sep();
+
+  // ── [8] ROWS SIN PERSONA (posible bug de dedup) ──
+  const noPersona=allDedup.filter(r=>!r.persona);
+  L.push(`[8] ROWS SIN PERSONA: ${noPersona.length===0?'✓ Ninguno':'⚠️ '+noPersona.length}`);
+  noPersona.forEach(r=>L.push(`    ⚠️ ${r.institucion}/${r.item}`));
+  sep();
+
+  // ── [9] FUENTES ──
+  L.push('[9] FUENTES POR TIPO (no-historial, tras dedup)');
+  const srcCount={auto:0,manual:0};
+  allDedup.forEach(r=>{ srcCount[r.source]=(srcCount[r.source]||0)+1; });
+  Object.entries(srcCount).forEach(([s,n])=>L.push(`    ${s.padEnd(10)}: ${n}`));
+  L.push('╚════════════════════════════════════════════════════════════════╝');
+
+  document.getElementById('dbout').textContent=L.join('\n');
+}
+
+// ─────────────────────────────────────────
+// INTERACTIONS
+// ─────────────────────────────────────────
+function xp(rid){
+  const rows=document.querySelectorAll(`#${rid}-d`);
+  const icon=document.getElementById(`xi${rid}`);
+  const isOpen=rows.length&&rows[0].classList.contains('open');
+  rows.forEach(r=>r.classList.toggle('open',!isOpen));
+  if(icon){icon.textContent=isOpen?'▶':'▼';icon.classList.toggle('open',!isOpen)}
+}
+function toggleDb(){
+  const p=document.getElementById('dbp');
+  const visible=p.style.display!=='none'&&p.style.display!=='';
+  p.style.display=visible?'none':'block';
+  document.getElementById('dbb').classList.toggle('open',!visible);
+  document.getElementById('dbarr').textContent=visible?'▼':'▲';
+  document.getElementById('dbBtn').classList.toggle('on',!visible);
+}
+
+// ─────────────────────────────────────────
+// LOADING
+// ─────────────────────────────────────────
+function showLoad(msg='Cargando…'){
+  document.getElementById('tw').innerHTML=`<div class="sb"><div class="spin"></div><div>${msg}</div></div>`;
+}
+function showErr(msg){
+  document.getElementById('tw').innerHTML=`<div class="sb">
+    <div style="font-size:28px">⚠️</div>
+    <div style="color:#f85149;font-weight:600">Error de conexión</div>
+    <div style="color:#8b949e;font-size:11px;max-width:440px">${msg}</div>
+    <button class="btn" onclick="loadData()" style="margin-top:10px">↻ Reintentar</button>
+  </div>`;
+}
+
+// ─────────────────────────────────────────
+// LOAD DATA
+// ─────────────────────────────────────────
+async function loadData(){
+  showLoad();
+  try{
+    S.raw=S.date==='actual'?await getSaldos():await getSnap(S.date);
+    renderCurrent();
+  }catch(e){showErr(e.message);console.error(e)}
+}
+
+async function refresh(){
+  showLoad('Actualizando…');
+  try{
+    const [rates,data]=await Promise.all([getRates(),getSaldos()]);
+    S.rates=rates; S.raw=data; S.date='actual';
+    document.getElementById('dsel').value='actual';
+    renderRates(); renderCurrent();
+  }catch(e){showErr(e.message)}
+}
+
+// ─────────────────────────────────────────
+// INIT
+// ─────────────────────────────────────────
+async function init(){
+  try{
+    // Load rates, data, dates, and config in parallel
+    const [rates,data,dates,configRows]=await Promise.all([
+      getRates(), getSaldos(), getDates(), getConfig()
+    ]);
+    S.rates=rates; S.raw=data;
+    // Parse config
+    if(configRows&&configRows.length){
+      configRows.forEach(r=>{
+        if(r.key==='safety_cash') S.config.safety_cash=parseFloat(r.value)||S.config.safety_cash;
+        if(r.key==='prov_inversion') S.config.prov_inversion=parseFloat(r.value)||0;
+        if(r.key==='tolerance') S.config.tolerance=parseFloat(r.value)||S.config.tolerance;
+      });
+    }
+    renderRates();
+
+    // Populate date selector
+    const sel=document.getElementById('dsel');
+    window._allDates=[];
+    if(dates&&dates.length){
+      const sorted=[...dates].sort((a,b)=>b.fecha.localeCompare(a.fecha));
+      sorted.forEach(d=>{
+        const o=document.createElement('option');
+        o.value=d.fecha; o.textContent=d.fecha; sel.appendChild(o);
+        window._allDates.push(d.fecha);
+      });
+    }
+    renderCurrent();
+  }catch(e){showErr(e.message);console.error(e)}
+}
+
+init();
+</script>
+</body>
+</html>
