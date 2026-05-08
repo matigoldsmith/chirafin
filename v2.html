@@ -431,7 +431,6 @@ tr.rcg td{padding:7px 14px;border-bottom:1px solid #F2F2F5;color:#888;font-size:
       <option value="actual">▶ Actual</option>
     </select>
     <button class="btn" onclick="refresh()">↻</button>
-    <button class="btn" id="dbBtn" onclick="toggleDb()">🔍 Debug</button>
   </div>
 </div>
 
@@ -439,13 +438,6 @@ tr.rcg td{padding:7px 14px;border-bottom:1px solid #F2F2F5;color:#888;font-size:
   <!-- Main content area -->
   <div class="tw" id="tw">
     <div class="sb"><div class="spin"></div><div>Conectando con Supabase…</div></div>
-  </div>
-
-  <div class="dbp" id="dbp">
-    <div class="dbh" onclick="toggleDb()">
-      <span>🔍 Sanity Checks &amp; Debug</span><span id="dbarr">▼</span>
-    </div>
-    <div class="dbb" id="dbb"><pre id="dbout">Pendiente…</pre></div>
   </div>
 
   <div class="foot"><span class="dlive"></span>ChiraFin · Datos live desde Supabase</div>
