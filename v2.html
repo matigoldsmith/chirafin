@@ -427,9 +427,8 @@ tr.rcg td{padding:7px 14px;border-bottom:1px solid #F2F2F5;color:#888;font-size:
   </div>
 
   <div class="dc">
-    <select id="dsel" onchange="onDate(this.value)">
-      <option value="actual">▶ Actual</option>
-    </select>
+    <button class="btn" id="dselActual" onclick="onDate('actual')">▶ Actual</button>
+    <input type="date" id="dsel" onchange="if(this.value) onDate(this.value)" style="background:#F7F8FA;border:1px solid #EBEBEF;color:#1A1A2E;padding:5px 10px;border-radius:6px;font-size:12px;font-family:inherit;outline:none;cursor:pointer">
     <button class="btn" onclick="refresh()">↻</button>
   </div>
 </div>
@@ -699,7 +698,14 @@ function setP(p){
   renderCurrent();
 }
 
-function onDate(v){ S.date=v; loadData(); }
+function onDate(v){
+  S.date=v;
+  const dsel=document.getElementById('dsel');
+  if(dsel) dsel.value=v==='actual'?'':v;
+  const btn=document.getElementById('dselActual');
+  if(btn) btn.classList.toggle('on', v==='actual');
+  loadData();
+}
 
 function setCompUnit(u){
   S.compUnit=u;
@@ -1742,16 +1748,14 @@ async function init(){
     }
     renderRates();
 
-    // Populate date selector
+    // Populate date selector (calendar input)
     const sel=document.getElementById('dsel');
     window._allDates=[];
     if(dates&&dates.length){
       const sorted=[...dates].sort((a,b)=>b.fecha.localeCompare(a.fecha));
-      sorted.forEach(d=>{
-        const o=document.createElement('option');
-        o.value=d.fecha; o.textContent=d.fecha; sel.appendChild(o);
-        window._allDates.push(d.fecha);
-      });
+      window._allDates=sorted.map(d=>d.fecha);
+      sel.min=sorted[sorted.length-1].fecha;
+      sel.max=sorted[0].fecha;
     }
     renderCurrent();
   }catch(e){showErr(e.message);console.error(e)}
@@ -1812,10 +1816,14 @@ function renderSummaryMob(){
   document.getElementById('mobRates').innerHTML=mobRatesHtml();
 
   // Top bar: date selector + persona pills in one row
-  const dsel=document.getElementById('dsel');
-  const dOpts=dsel?dsel.innerHTML:'<option value="actual">Actual</option>';
+  const _minD=window._allDates?.length?window._allDates[window._allDates.length-1]:'';
+  const _maxD=window._allDates?.length?window._allDates[0]:'';
+  const _curD=S.date==='actual'?'':S.date;
   let h=`<div class="mob-topbar">
-    <select class="mob-dsel" onchange="onDate(this.value)">${dOpts}</select>
+    <button class="mob-pbtn ${S.date==='actual'?'on':''}" onclick="onDate('actual')" style="flex-shrink:0">Actual</button>
+    <input type="date" class="mob-dsel" min="${_minD}" max="${_maxD}" value="${_curD}"
+      onchange="if(this.value) onDate(this.value)"
+      style="flex:1;padding:7px 8px;border-radius:8px;border:1px solid #EBEBEF;background:#F7F8FA;color:#1A1A2E;font-size:13px;font-family:inherit;outline:none;-webkit-appearance:none">
     <div class="mob-persona">
       <button class="mob-pbtn ${S.persona==='todos'?'on':''}" onclick="setP('todos')">Todos</button>
       <button class="mob-pbtn ${S.persona==='PN'?'on':''}" onclick="setP('PN')">PN</button>
@@ -1905,7 +1913,6 @@ function renderSummaryMob(){
   h+=`</div>`;
 
   document.getElementById('tw').innerHTML=h;
-  setTimeout(()=>{ const s=document.querySelector('.mob-dsel'); if(s) s.value=S.date; },0);
 }
 
 // ─────────────────────────────────────────
