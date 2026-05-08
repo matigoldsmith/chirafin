@@ -219,20 +219,20 @@ tr.rcg td{padding:7px 14px;border-bottom:1px solid #30363d;color:#8b949e;font-si
   .mob-hero-inv-lbl{font-size:10px;text-transform:uppercase;letter-spacing:.7px;color:#6e7681}
   .mob-hero-inv-val{font-size:14px;font-weight:700;color:#f0883e}
 
-  /* ── DATE BAR (mobile) ── */
-  .mob-datebar{display:flex;gap:8px;margin-bottom:12px;align-items:center}
-  .mob-datebar select{
+  /* ── TOP BAR (date + persona, one row) ── */
+  .mob-topbar{display:flex;align-items:center;gap:8px;margin-bottom:12px}
+  .mob-dsel{
     flex:1;background:#21262d;border:1px solid #30363d;color:#e6edf3;
-    padding:9px 12px;border-radius:10px;font-size:13px;font-family:inherit;outline:none;
+    padding:8px 10px;border-radius:10px;font-size:12px;font-family:inherit;outline:none;
+    min-width:0;
   }
-  .mob-datebar select:focus{border-color:#7c83fd}
-
-  /* ── PERSONA PILLS ── */
-  .mob-persona{display:flex;gap:6px;margin-bottom:12px}
+  .mob-dsel:focus{border-color:#7c83fd}
+  .mob-persona{display:flex;gap:5px;flex-shrink:0}
   .mob-pbtn{
-    flex:1;padding:8px;border-radius:8px;border:1px solid #30363d;
+    padding:7px 11px;border-radius:8px;border:1px solid #30363d;
     background:#21262d;color:#8b949e;font-size:12px;font-family:inherit;
     cursor:pointer;text-align:center;transition:all .15s;font-weight:500;
+    -webkit-tap-highlight-color:transparent;
   }
   .mob-pbtn.on{border-color:#7c83fd;color:#7c83fd;background:rgba(124,131,253,.1)}
 
@@ -1792,16 +1792,16 @@ function renderSummaryMob(){
   // Update mobile rates bar
   document.getElementById('mobRates').innerHTML=mobRatesHtml();
 
-  // Date bar (clone options from desktop select)
+  // Top bar: date selector + persona pills in one row
   const dsel=document.getElementById('dsel');
-  const dOpts=dsel?dsel.innerHTML:'<option value="actual">▶ Actual</option>';
-  let h=`<div class="mob-datebar"><select onchange="onDate(this.value)">${dOpts}</select></div>`;
-
-  // Persona pills
-  h+=`<div class="mob-persona">
-    <button class="mob-pbtn ${S.persona==='todos'?'on':''}" onclick="setP('todos')">Todos</button>
-    <button class="mob-pbtn ${S.persona==='PN'?'on':''}" onclick="setP('PN')">PN</button>
-    <button class="mob-pbtn ${S.persona==='PJ'?'on':''}" onclick="setP('PJ')">PJ</button>
+  const dOpts=dsel?dsel.innerHTML:'<option value="actual">Actual</option>';
+  let h=`<div class="mob-topbar">
+    <select class="mob-dsel" onchange="onDate(this.value)">${dOpts}</select>
+    <div class="mob-persona">
+      <button class="mob-pbtn ${S.persona==='todos'?'on':''}" onclick="setP('todos')">Todos</button>
+      <button class="mob-pbtn ${S.persona==='PN'?'on':''}" onclick="setP('PN')">PN</button>
+      <button class="mob-pbtn ${S.persona==='PJ'?'on':''}" onclick="setP('PJ')">PJ</button>
+    </div>
   </div>`;
 
   // Hero — unit helpers
@@ -1843,7 +1843,9 @@ function renderSummaryMob(){
   // Category list — values shown in selected unit
   h+=`<div class="mob-catlist">`;
   CATS.forEach((cat,idx)=>{
-    const clp=catClp[cat], items=g[cat];
+    const clp=catClp[cat];
+    // Filter out zero-monto items (monto original = 0 or null)
+    const items=(g[cat]||[]).filter(it=>it.monto!=null&&parseFloat(it.monto)!==0);
     if(!items||items.length===0) return;
     const color=COLORS[cat]||'#666';
     const neg=clp<0;
@@ -1884,7 +1886,7 @@ function renderSummaryMob(){
   h+=`</div>`;
 
   document.getElementById('tw').innerHTML=h;
-  setTimeout(()=>{ const s=document.querySelector('.mob-datebar select'); if(s) s.value=S.date; },0);
+  setTimeout(()=>{ const s=document.querySelector('.mob-dsel'); if(s) s.value=S.date; },0);
 }
 
 // ─────────────────────────────────────────
