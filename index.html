@@ -1539,6 +1539,7 @@ async function compQuick(mode){
 // SANITY CHECKS — profundo
 // ─────────────────────────────────────────
 function renderSanity(rows,T){
+  if(!document.getElementById('dbout')) return; // debug panel removed
   const raw=S.raw;
   const usd=S.rates?.usd||1, uf=S.rates?.uf||1;
 
