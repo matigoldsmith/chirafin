@@ -155,6 +155,44 @@ tr.rcg td{padding:7px 14px;border-bottom:1px solid #30363d;color:#8b949e;font-si
 
 .info-box{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:24px;color:#8b949e;font-size:13px}
 .view-hidden{display:none}
+
+/* ── MOBILE ── */
+@media(max-width:768px){
+  body{font-size:12px}
+  .hdr{padding:10px 14px;gap:8px;flex-wrap:wrap}
+  .logo{font-size:17px}
+  .rates{gap:5px;flex-wrap:wrap}
+  .rpill{padding:3px 7px}
+  .rl{font-size:9px}
+  .rv{font-size:12px}
+  /* ctrl bar: horizontal scroll, no wrap */
+  .ctrl{padding:7px 10px;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;flex-wrap:nowrap;scrollbar-width:none}
+  .ctrl::-webkit-scrollbar{display:none}
+  .tabs{flex-shrink:0}
+  .sep{display:none}
+  .dc{margin-left:0;flex-shrink:0}
+  select{max-width:110px;font-size:11px;padding:4px 6px}
+  .btn{padding:4px 8px;font-size:11px}
+  /* content */
+  .content{padding:10px 12px}
+  /* cards: 1 column */
+  .cards{grid-template-columns:1fr}
+  .cv-val{font-size:17px}
+  .cv-row{gap:6px}
+  /* tables: tighter padding + touch scroll */
+  .tw{-webkit-overflow-scrolling:touch}
+  td,thead th{padding:6px 8px;font-size:11px}
+  /* hide USD M and UF columns on narrow screens */
+  .mh{display:none}
+  /* caja: 1 column */
+  .caja-grid{grid-template-columns:1fr}
+  .caja-bar{grid-template-columns:repeat(2,1fr)}
+  .caja-metric .cm-val{font-size:13px}
+  /* comparar form: stack */
+  .comp-form{flex-direction:column;align-items:flex-start;gap:8px}
+  /* footer */
+  .foot{font-size:10px;padding:10px}
+}
 </style>
 </head>
 <body>
@@ -519,7 +557,7 @@ function renderSummary(){
 
   let h=`<table><thead><tr>
     <th style="min-width:220px">Categoría</th>
-    <th>CLP MM</th><th>USD M</th><th>UF</th>
+    <th>CLP MM</th><th class="mh">USD M</th><th class="mh">UF</th>
     <th class="thp">%</th>
   </tr></thead><tbody>`;
 
@@ -530,7 +568,7 @@ function renderSummary(){
     const pctInvNum=totClp===0?0:Math.min(invClp/totClp*100,100);
     h+=`<tr class="rp">
       <td>TOTAL PATRIMONIO INVERSIONES</td>
-      <td>${fCLP(invClp)}</td><td>${fUSD(invClp)}</td><td>${fUF(invClp)}</td>
+      <td>${fCLP(invClp)}</td><td class="mh">${fUSD(invClp)}</td><td class="mh">${fUF(invClp)}</td>
       <td><div class="pbw"><div class="pbo"><div class="pbi" style="width:${pctInvNum}%;background:#f0883e"></div></div>
         <span style="color:#f0883e;font-weight:700">${pctInv}</span></div></td>
     </tr>`;
@@ -554,8 +592,8 @@ function renderSummary(){
         <span class="cn">${cat}</span>
       </div></td>
       <td class="${vc(clp)}">${fCLP(clp)}</td>
-      <td class="${vc(clp)}">${fUSD(clp)}</td>
-      <td class="${vc(clp)}">${fUF(clp)}</td>
+      <td class="mh ${vc(clp)}">${fUSD(clp)}</td>
+      <td class="mh ${vc(clp)}">${fUF(clp)}</td>
       <td><div class="pbw"><div class="pbo"><div class="pbi" style="width:${pctNum}%"></div></div>
         <span style="color:#7c83fd;font-weight:600;font-size:12px">${pct}</span></div></td>
     </tr>`;
@@ -571,8 +609,8 @@ function renderSummary(){
           <div class="ditem">${it.item||'—'} · ${it.moneda} · ${it.categoria||''}</div>
         </div></td>
         <td class="${neg?'vn':'vp'}">${fCLP(it.clp)}</td>
-        <td class="${neg?'vn':'vp'}">${fUSD(it.clp)}</td>
-        <td class="${neg?'vn':'vp'}">${fUF(it.clp)}</td>
+        <td class="mh ${neg?'vn':'vp'}">${fUSD(it.clp)}</td>
+        <td class="mh ${neg?'vn':'vp'}">${fUF(it.clp)}</td>
         <td><span class="dim">${fPct(it.clp,totClp)}</span></td>
       </tr>`;
     });
@@ -583,7 +621,7 @@ function renderSummary(){
     const pctInvNum=totClp===0?0:Math.min(invClp/totClp*100,100);
     h+=`<tr class="rp">
       <td>TOTAL PATRIMONIO INVERSIONES</td>
-      <td>${fCLP(invClp)}</td><td>${fUSD(invClp)}</td><td>${fUF(invClp)}</td>
+      <td>${fCLP(invClp)}</td><td class="mh">${fUSD(invClp)}</td><td class="mh">${fUF(invClp)}</td>
       <td><div class="pbw"><div class="pbo"><div class="pbi" style="width:${pctInvNum}%;background:#f0883e"></div></div>
         <span style="color:#f0883e;font-weight:700">${pctInv}</span></div></td>
     </tr>`;
@@ -591,7 +629,7 @@ function renderSummary(){
 
   h+=`<tr class="rt">
     <td>TOTAL GENERAL</td>
-    <td>${fCLP(totClp)}</td><td>${fUSD(totClp)}</td><td>${fUF(totClp)}</td>
+    <td>${fCLP(totClp)}</td><td class="mh">${fUSD(totClp)}</td><td class="mh">${fUF(totClp)}</td>
     <td><span style="color:#3fb950;font-weight:700">100%</span></td>
   </tr></tbody></table>`;
 
@@ -618,7 +656,7 @@ function renderDetail(){
     <th class="thl">Item</th>
     <th>Monto</th>
     <th style="text-align:center">Mon.</th>
-    <th>CLP MM</th><th>USD M</th><th>UF</th>
+    <th>CLP MM</th><th class="mh">USD M</th><th class="mh">UF</th>
     <th class="thl" style="min-width:110px">Última act.</th>
     <th class="thl">Tipo Act.</th>
   </tr></thead><tbody>`;
@@ -636,7 +674,7 @@ function renderDetail(){
       patriShown=true;
       h+=`<tr class="rp">
         <td colspan="7">TOTAL PATRIMONIO INVERSIONES</td>
-        <td>${fCLP(invClp)}</td><td>${fUSD(invClp)}</td><td>${fUF(invClp)}</td>
+        <td>${fCLP(invClp)}</td><td class="mh">${fUSD(invClp)}</td><td class="mh">${fUF(invClp)}</td>
         <td></td><td></td>
       </tr>`;
     }
@@ -666,8 +704,8 @@ function renderDetail(){
         <td class="${neg?'vn':'vw'}">${fMonto(it.monto,it.moneda)}</td>
         <td style="text-align:center;color:#6e7681">${it.moneda||'—'}</td>
         <td class="${neg?'vn':'vw'}">${fCLP(it.clp)}</td>
-        <td class="${neg?'vn':'vw'}">${fUSD(it.clp)}</td>
-        <td class="${neg?'vn':'vw'}">${fUF(it.clp)}</td>
+        <td class="mh ${neg?'vn':'vw'}">${fUSD(it.clp)}</td>
+        <td class="mh ${neg?'vn':'vw'}">${fUF(it.clp)}</td>
         <td class="tdl dim" style="font-size:11px">${fmtTs(tsOf(it))}</td>
         <td class="tdl dim" style="font-size:11px">${ta}</td>
       </tr>`;
@@ -678,7 +716,7 @@ function renderDetail(){
     const sub=catClp[cat];
     h+=`<tr class="rs">
       <td colspan="7">SUBTOTAL ${cat.toUpperCase()}</td>
-      <td>${fCLP(sub)}</td><td>${fUSD(sub)}</td><td>${fUF(sub)}</td>
+      <td>${fCLP(sub)}</td><td class="mh">${fUSD(sub)}</td><td class="mh">${fUF(sub)}</td>
       <td></td><td></td>
     </tr>`;
   });
@@ -687,14 +725,14 @@ function renderDetail(){
   if(!patriShown){
     h+=`<tr class="rp">
       <td colspan="7">TOTAL PATRIMONIO INVERSIONES</td>
-      <td>${fCLP(invClp)}</td><td>${fUSD(invClp)}</td><td>${fUF(invClp)}</td>
+      <td>${fCLP(invClp)}</td><td class="mh">${fUSD(invClp)}</td><td class="mh">${fUF(invClp)}</td>
       <td></td><td></td>
     </tr>`;
   }
 
   h+=`<tr class="rt">
     <td colspan="7">TOTAL GENERAL</td>
-    <td>${fCLP(totClp)}</td><td>${fUSD(totClp)}</td><td>${fUF(totClp)}</td>
+    <td>${fCLP(totClp)}</td><td class="mh">${fUSD(totClp)}</td><td class="mh">${fUF(totClp)}</td>
     <td></td><td></td>
   </tr></tbody></table>`;
 
