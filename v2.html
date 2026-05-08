@@ -699,9 +699,16 @@ function setP(p){
 }
 
 function onDate(v){
+  // Snap to nearest available date if not 'actual'
+  if(v!=='actual' && window._allDates && window._allDates.length){
+    v=window._allDates.reduce((best,cur)=>Math.abs(new Date(cur)-new Date(v))<Math.abs(new Date(best)-new Date(v))?cur:best, window._allDates[0]);
+  }
   S.date=v;
   const dsel=document.getElementById('dsel');
   if(dsel) dsel.value=v==='actual'?'':v;
+  // Also update mobile date input if visible
+  const mdsel=document.querySelector('.mob-dsel');
+  if(mdsel) mdsel.value=v==='actual'?'':v;
   const btn=document.getElementById('dselActual');
   if(btn) btn.classList.toggle('on', v==='actual');
   loadData();
@@ -1837,6 +1844,34 @@ function renderSummaryMob(){
   function scaleMob(clp){ if(mu==='usd') return clp/(r.usd||1)/1e3; if(mu==='uf') return clp/(r.uf||1); return clp/1e6; }
   function fvMob(clp){ const v=scaleMob(clp); return mu==='clp' ? fi(Math.round(v)) : fi(Math.round(v*10)/10); }
   function unitLblMob(){ return mu==='usd'?'USD M':mu==='uf'?'UF':'MM CLP'; }
+  // Zero-rounding fallback: when value rounds to "0" but isn't zero, show native value
+  function fvMobOrNative(clp, rawMonto, rawMoneda){
+    const val=fvMob(clp);
+    if(val==='0'&&clp!==0){
+      const m=Math.abs(parseFloat(rawMonto||0));
+      const sign=clp<0?'-':'';
+      if(rawMoneda==='CLP') return sign+fi(Math.round(m));
+      if(rawMoneda==='USD') return sign+m.toFixed(2);
+      if(rawMoneda==='UF')  return sign+m.toFixed(2);
+      return sign+fi(Math.round(Math.abs(clp)));
+    }
+    return val;
+  }
+  function uLblForItem(clp, rawMoneda){
+    const val=fvMob(clp);
+    if(val==='0'&&clp!==0) return rawMoneda;
+    return unitLblMob();
+  }
+  function fvMobCat(clp){
+    const val=fvMob(clp);
+    if(val==='0'&&clp!==0) return fi(Math.round(Math.abs(clp)));
+    return val;
+  }
+  function uLblCat(clp){
+    const val=fvMob(clp);
+    if(val==='0'&&clp!==0) return 'CLP';
+    return unitLblMob();
+  }
 
   // Hero card
   const totMM=fi(Math.round(totClp/1e6));
@@ -1863,7 +1898,7 @@ function renderSummaryMob(){
       ${chip('uf','UF',totUF,'','88,166,255')}
     </div>
     <div class="mob-hero-inv">
-      <span class="mob-hero-inv-lbl">Patrimonio Inv.</span>
+      <span class="mob-hero-inv-lbl">Patrimonio Inversiones</span>
       <span class="mob-hero-inv-val">${invScaled}<span style="font-size:11px;opacity:.6;margin-left:3px">${unitLblMob()}</span></span>
     </div>
   </div>`;
@@ -1879,8 +1914,8 @@ function renderSummaryMob(){
     const neg=clp<0;
     const rid='mc'+idx;
     const pct=fPct(clp,totClp);
-    const catVal=fvMob(clp);
-    const uLbl=unitLblMob();
+    const catVal=fvMobCat(clp);
+    const uLbl=uLblCat(clp);
     h+=`<div class="mob-catrow">
       <div class="mob-cathead" onclick="mobXp('${rid}')">
         <span class="mob-cdot" style="background:${color}"></span>
@@ -1894,7 +1929,8 @@ function renderSummaryMob(){
       <div class="mob-items" id="mitems-${rid}">`;
     [...items].sort((a,b)=>b.clp-a.clp).forEach(it=>{
       const ineg=it.clp<0;
-      const itemVal=fvMob(it.clp);
+      const itemVal=fvMobOrNative(it.clp, it.monto, it.moneda);
+      const iULbl=uLblForItem(it.clp, it.moneda);
       h+=`<div class="mob-item">
         <div class="mob-item-info">
           <div class="mob-item-top">
@@ -1904,7 +1940,7 @@ function renderSummaryMob(){
           <div class="mob-item-sub">${it.item||'—'} · ${it.moneda}</div>
         </div>
         <div class="mob-item-right">
-          <div class="mob-item-clp ${ineg?'vn':'vp'}">${itemVal} ${uLbl}</div>
+          <div class="mob-item-clp ${ineg?'vn':'vp'}">${itemVal} ${iULbl}</div>
           <div class="mob-item-ts">${fmtTs(tsOf(it))}</div>
         </div>
       </div>`;
