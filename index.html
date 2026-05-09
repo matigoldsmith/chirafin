@@ -1986,11 +1986,15 @@ function renderCajaMob(){
   const ratio_str=(ratio>=0?'+':'')+ratio.toFixed(1).replace('.',',')+' %';
 
   let h=subtabs;
+  function fMM1mob(v){
+    const neg=v<0, abs=Math.abs(v);
+    return (neg?'-':'')+(abs/1e6).toFixed(1).replace('.',',')+' <span style="font-size:11px;font-weight:600;opacity:.7">MM CLP</span>';
+  }
   h+=`<div class="mob-metrics">
-    <div class="mob-metric"><div class="mob-metric-lbl">Liquidez Bruta</div><div class="mob-metric-val ${lbC}">${liq_bruta<0?'-':''}${fi(Math.abs(liq_bruta))}</div></div>
-    <div class="mob-metric"><div class="mob-metric-lbl" style="color:#7c83fd">Liquidez Neta</div><div class="mob-metric-val ${lnC}">${liq_neta<0?'-':''}${fi(Math.abs(liq_neta))}</div></div>
+    <div class="mob-metric"><div class="mob-metric-lbl">Liquidez Bruta</div><div class="mob-metric-val ${lbC}">${fMM1mob(liq_bruta)}</div></div>
+    <div class="mob-metric"><div class="mob-metric-lbl" style="color:#7c83fd">Liquidez Neta</div><div class="mob-metric-val ${lnC}">${fMM1mob(liq_neta)}</div></div>
     <div class="mob-metric"><div class="mob-metric-lbl" style="color:#7c83fd">Ratio Neto</div><div class="mob-metric-val ${lnC}">${ratio_str}</div></div>
-    <div class="mob-metric"><div class="mob-metric-lbl">Disponible (tol.${tol}%)</div><div class="mob-metric-val ${dnC}">${dispo_neto<0?'-':''}${fi(Math.abs(dispo_neto))}</div></div>
+    <div class="mob-metric"><div class="mob-metric-lbl">Disponible (tol.${tol}%)</div><div class="mob-metric-val ${dnC}">${fMM1mob(dispo_neto)}</div></div>
   </div>`;
 
   h+=`<div class="mob-sec-title" style="color:#3fb950">Activos Corto Plazo</div><div class="mob-list">`;
