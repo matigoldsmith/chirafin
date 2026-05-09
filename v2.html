@@ -121,7 +121,7 @@ tr.rcg td{padding:7px 14px;border-bottom:1px solid #F2F2F5;color:#888;font-size:
 .caja-col .cs{color:#999;font-size:10px}
 .caja-col .cv{text-align:right;font-weight:600;white-space:nowrap}
 .caja-col .cm{color:#999;font-size:10px;text-align:right}
-.caja-subtotal td{background:rgba(247,248,250,.8);font-weight:700;font-size:12px}
+.caja-subtotal td{background:rgba(247,248,250,.8);font-weight:700;font-size:12px;border-bottom:none!important;border-top:1px solid #EBEBEF}
 .caja-bar{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
 .caja-metric{background:#FFFFFF;border:1px solid #EBEBEF;border-radius:8px;padding:10px 14px;box-shadow:0 1px 4px rgba(0,0,0,.04)}
 .caja-metric .cm-label{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:#999;margin-bottom:4px}
@@ -932,7 +932,7 @@ function renderDetail(){
       firstInCat=false;
     });
 
-    // Subtotal row (only non-zero items contribute, but total uses all items in cat)
+    // Total row (only non-zero items contribute, but total uses all items in cat)
     const sub=catClp[cat];
     h+=`<tr class="rs">
       <td colspan="7">SUBTOTAL ${cat.toUpperCase()}</td>
@@ -1073,7 +1073,7 @@ function renderCaja(){
     <table><tbody>
       ${cajaRows(activos,'vp')}
       <tr class="caja-subtotal">
-        <td style="color:#3fb950">Subtotal</td>
+        <td style="color:#3fb950">Total</td>
         <td class="cv" style="color:#3fb950">${fi(totalActivos)}</td>
         <td></td>
       </tr>
@@ -1096,7 +1096,7 @@ function renderCaja(){
       ${cajaRows(pasivos,'vn')}
       ${provRows}
       <tr class="caja-subtotal">
-        <td style="color:#f85149">Subtotal</td>
+        <td style="color:#f85149">Total</td>
         <td class="cv" style="color:#f85149">${fi(Math.abs(total_pasivos_calc))}</td>
         <td></td>
       </tr>
@@ -1995,13 +1995,13 @@ function renderCajaMob(){
 
   h+=`<div class="mob-sec-title" style="color:#3fb950">Activos Corto Plazo</div><div class="mob-list">`;
   activos.forEach(r=>{ h+=`<div class="mob-lrow"><div class="mob-lrow-info"><div class="mob-lrow-name">${r.institucion||'—'}</div><div class="mob-lrow-sub">${r.item||''} · ${r.persona||''}</div></div><div class="mob-lrow-right"><div class="mob-lrow-amt vp">${fi(r.clp)}</div><div class="mob-lrow-ts">${fmtTs(tsOf(r))}</div></div></div>`; });
-  h+=`<div class="mob-lrow mob-lrow-subtotal"><div class="mob-lrow-info"><div class="mob-lrow-name" style="color:#3fb950">Subtotal</div></div><div class="mob-lrow-right"><div class="mob-lrow-amt vp">${fi(totalActivos)}</div></div></div></div>`;
+  h+=`<div class="mob-lrow mob-lrow-subtotal"><div class="mob-lrow-info"><div class="mob-lrow-name" style="color:#3fb950">Total</div></div><div class="mob-lrow-right"><div class="mob-lrow-amt vp">${fi(totalActivos)}</div></div></div></div>`;
 
   h+=`<div class="mob-sec-title" style="color:#f85149">Obligaciones Corto Plazo</div><div class="mob-list">`;
   pasivos.forEach(r=>{ h+=`<div class="mob-lrow"><div class="mob-lrow-info"><div class="mob-lrow-name">${r.institucion||'—'}</div><div class="mob-lrow-sub">${r.item||''} · ${r.persona||''}</div></div><div class="mob-lrow-right"><div class="mob-lrow-amt vn">${fi(Math.abs(r.clp))}</div><div class="mob-lrow-ts">${fmtTs(tsOf(r))}</div></div></div>`; });
   if(safety_cash!==0) h+=`<div class="mob-lrow"><div class="mob-lrow-info"><div class="mob-lrow-name">Safety Cash</div><div class="mob-lrow-sub">Reserva</div></div><div class="mob-lrow-right"><div class="mob-lrow-amt vw">${fi(Math.abs(safety_cash))}</div></div></div>`;
   if(prov_inv!==0) h+=`<div class="mob-lrow"><div class="mob-lrow-info"><div class="mob-lrow-name">Provisión</div><div class="mob-lrow-sub">Reserva</div></div><div class="mob-lrow-right"><div class="mob-lrow-amt vw">${fi(Math.abs(prov_inv))}</div></div></div>`;
-  h+=`<div class="mob-lrow mob-lrow-subtotal"><div class="mob-lrow-info"><div class="mob-lrow-name" style="color:#f85149">Subtotal</div></div><div class="mob-lrow-right"><div class="mob-lrow-amt vn">${fi(Math.abs(total_pasivos_calc))}</div></div></div></div>`;
+  h+=`<div class="mob-lrow mob-lrow-subtotal"><div class="mob-lrow-info"><div class="mob-lrow-name" style="color:#f85149">Total</div></div><div class="mob-lrow-right"><div class="mob-lrow-amt vn">${fi(Math.abs(total_pasivos_calc))}</div></div></div></div>`;
 
   document.getElementById('tw').innerHTML=h;
 }
