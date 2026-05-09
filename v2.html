@@ -445,13 +445,13 @@ tr.rcg td{padding:7px 14px;border-bottom:1px solid #F2F2F5;color:#888;font-size:
 <!-- ── MOBILE BOTTOM NAV ── -->
 <div class="mob-nav">
   <button class="mob-nb on" id="mnb0" onclick="mobNav('summary')">
-    <span class="mob-nb-icon">📊</span>Patrimonio
+    <span class="mob-nb-icon"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="10" width="4" height="8" rx="1" fill="currentColor" opacity=".5"/><rect x="8" y="6" width="4" height="12" rx="1" fill="currentColor" opacity=".8"/><rect x="14" y="2" width="4" height="16" rx="1" fill="currentColor"/></svg></span>Patrimonio
   </button>
   <button class="mob-nb" id="mnb1" onclick="mobNav('caja')">
-    <span class="mob-nb-icon">💰</span>Caja
+    <span class="mob-nb-icon"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="5" width="16" height="11" rx="2" stroke="currentColor" stroke-width="1.6" fill="none"/><path d="M2 8h16" stroke="currentColor" stroke-width="1.6"/><circle cx="6" cy="12" r="1.2" fill="currentColor"/></svg></span>Caja
   </button>
   <button class="mob-nb" id="mnb2" onclick="mobNav('comparar')">
-    <span class="mob-nb-icon">📅</span>Comparar
+    <span class="mob-nb-icon"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 14 L4 6 M4 6 L7 9 M4 6 L1 9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 6 L16 14 M16 14 L13 11 M16 14 L19 11" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><line x1="8" y1="10" x2="12" y2="10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span>Comparar
   </button>
 </div>
 
@@ -635,6 +635,10 @@ function fi(v){ return Math.round(v).toLocaleString('es-CL'); }
 function fCLP(clp){ return fi(clp/1e6); }
 function fUSD(clp){ return fi(clp/(S.rates?.usd||1)/1e3); }
 function fUF(clp) { return fi(clp/(S.rates?.uf||1)); }
+// Smart formatters: if value rounds to "0" but underlying clp ≠ 0, show native value instead
+function fCLPs(clp){ const v=fCLP(clp); if(v==='0'&&clp!==0) return fi(Math.round(Math.abs(clp)))+' CLP'; return v; }
+function fUSDs(clp){ const v=fUSD(clp); if(v==='0'&&clp!==0) return (Math.abs(clp)/(S.rates?.usd||1)).toFixed(2)+' USD'; return v; }
+function fUFs(clp) { const v=fUF(clp);  if(v==='0'&&clp!==0) return (Math.abs(clp)/(S.rates?.uf||1)).toFixed(2)+' UF';  return v; }
 function fPct(clp,tot){ return tot===0?'0.0%':(clp/tot*100).toFixed(1)+'%'; }
 function fMonto(m,moneda){ // native monto formatted
   if(m==null||m===0) return '—';
@@ -791,8 +795,10 @@ function renderSummary(){
   CATS.forEach((cat,idx)=>{
     const clp=catClp[cat];
     const items=g[cat];
-    // Skip categories with no items — matches Python: if cat not in cat_totals: continue
-    if(items.length===0) return;
+    // Filter zero-monto items
+    const nonZeroItems=(items||[]).filter(it=>it.monto!=null&&parseFloat(it.monto)!==0);
+    // Skip categories with no items or all-zero items
+    if(nonZeroItems.length===0) return;
     // Insert TOTAL PATRIMONIO INVERSIONES just before "Casa" — matches Python trigger
     if(cat==='Casa'&&!summaryPatriShown) _addSummaryPatri();
     const color=COLORS[cat]||'#666';
@@ -806,14 +812,14 @@ function renderSummary(){
         <span class="cdot" style="background:${color}"></span>
         <span class="cn">${cat}</span>
       </div></td>
-      <td class="${vc(clp)}">${fCLP(clp)}</td>
-      <td class="mh ${vc(clp)}">${fUSD(clp)}</td>
-      <td class="mh ${vc(clp)}">${fUF(clp)}</td>
+      <td class="${vc(clp)}">${fCLPs(clp)}</td>
+      <td class="mh ${vc(clp)}">${fUSDs(clp)}</td>
+      <td class="mh ${vc(clp)}">${fUFs(clp)}</td>
       <td><div class="pbw"><div class="pbo"><div class="pbi" style="width:${pctNum}%"></div></div>
         <span style="color:#7c83fd;font-weight:600;font-size:12px">${pct}</span></div></td>
     </tr>`;
 
-    [...items].sort((a,b)=>b.clp-a.clp).forEach(it=>{
+    [...nonZeroItems].sort((a,b)=>b.clp-a.clp).forEach(it=>{
       const neg=it.clp<0;
       h+=`<tr class="dr" id="${rid}-d">
         <td><div class="dic">
@@ -823,9 +829,9 @@ function renderSummary(){
           </div>
           <div class="ditem">${it.item||'—'} · ${it.moneda} · ${it.categoria||''}</div>
         </div></td>
-        <td class="${neg?'vn':'vp'}">${fCLP(it.clp)}</td>
-        <td class="mh ${neg?'vn':'vp'}">${fUSD(it.clp)}</td>
-        <td class="mh ${neg?'vn':'vp'}">${fUF(it.clp)}</td>
+        <td class="${neg?'vn':'vp'}">${fCLPs(it.clp)}</td>
+        <td class="mh ${neg?'vn':'vp'}">${fUSDs(it.clp)}</td>
+        <td class="mh ${neg?'vn':'vp'}">${fUFs(it.clp)}</td>
         <td><span class="dim">${fPct(it.clp,totClp)}</span></td>
       </tr>`;
     });
@@ -849,7 +855,6 @@ function renderSummary(){
   </tr></tbody></table>`;
 
   document.getElementById('tw').innerHTML=h;
-  renderSanity(rows,T);
 }
 
 // ─────────────────────────────────────────
@@ -918,9 +923,9 @@ function renderDetail(){
         <td class="tdl" style="color:#8b949e;font-style:italic">${it.item||'—'}</td>
         <td class="${neg?'vn':'vw'}">${fMonto(it.monto,it.moneda)}</td>
         <td style="text-align:center;color:#6e7681">${it.moneda||'—'}</td>
-        <td class="${neg?'vn':'vw'}">${fCLP(it.clp)}</td>
-        <td class="mh ${neg?'vn':'vw'}">${fUSD(it.clp)}</td>
-        <td class="mh ${neg?'vn':'vw'}">${fUF(it.clp)}</td>
+        <td class="${neg?'vn':'vw'}">${fCLPs(it.clp)}</td>
+        <td class="mh ${neg?'vn':'vw'}">${fUSDs(it.clp)}</td>
+        <td class="mh ${neg?'vn':'vw'}">${fUFs(it.clp)}</td>
         <td class="tdl dim" style="font-size:11px">${fmtTs(tsOf(it))}</td>
         <td class="tdl dim" style="font-size:11px">${ta}</td>
       </tr>`;
@@ -958,7 +963,6 @@ function renderDetail(){
   }
 
   document.getElementById('tw').innerHTML=h;
-  renderSanity(rows,T);
 }
 
 // ─────────────────────────────────────────
@@ -1032,6 +1036,11 @@ function renderCaja(){
   }
 
   const ratio_str=(ratio>=0?'+':'')+ratio.toFixed(2).replace('.',',')+'%';
+  // Formateador MM con 1 decimal para los cards superiores
+  function fMM1(v){
+    const neg=v<0, abs=Math.abs(v);
+    return (neg?'-':'')+(abs/1e6).toFixed(1).replace('.',',')+' <span style="font-size:12px;font-weight:600;opacity:.7">MM CLP</span>';
+  }
 
   // BARRA RESUMEN — va ARRIBA de la tabla
   const lbC=liq_bruta>=0?'vp':'vn';
@@ -1040,11 +1049,11 @@ function renderCaja(){
   let h=`<div class="caja-bar" style="grid-template-columns:repeat(4,1fr);margin-bottom:12px">
     <div class="caja-metric">
       <div class="cm-label">Liquidez Bruta</div>
-      <div class="cm-val ${lbC}">${liq_bruta<0?'-':''}${fi(Math.abs(liq_bruta))}</div>
+      <div class="cm-val ${lbC}">${fMM1(liq_bruta)}</div>
     </div>
     <div class="caja-metric">
       <div class="cm-label" style="color:#7c83fd">Liquidez Neta</div>
-      <div class="cm-val ${lnC}">${liq_neta<0?'-':''}${fi(Math.abs(liq_neta))}</div>
+      <div class="cm-val ${lnC}">${fMM1(liq_neta)}</div>
     </div>
     <div class="caja-metric">
       <div class="cm-label" style="color:#7c83fd">Ratio Neto</div>
@@ -1052,7 +1061,7 @@ function renderCaja(){
     </div>
     <div class="caja-metric">
       <div class="cm-label">Disponible (tol. ${tol}%)</div>
-      <div class="cm-val ${dnC}">${dispo_neto<0?'-':''}${fi(Math.abs(dispo_neto))}</div>
+      <div class="cm-val ${dnC}">${fMM1(dispo_neto)}</div>
     </div>
   </div>`;
 
@@ -1823,62 +1832,46 @@ function renderSummaryMob(){
   // Update mobile rates bar
   document.getElementById('mobRates').innerHTML=mobRatesHtml();
 
-  // Top bar: date selector + persona pills in one row
-  const _minD=window._allDates?.length?window._allDates[window._allDates.length-1]:'';
-  const _maxD=window._allDates?.length?window._allDates[0]:'';
-  const _curD=S.date==='actual'?'':S.date;
+  // Top bar: solo pills de persona (sin selector de fecha)
   let h=`<div class="mob-topbar">
-    <button class="mob-pbtn ${S.date==='actual'?'on':''}" onclick="onDate('actual')" style="flex-shrink:0">Actual</button>
-    <input type="date" class="mob-dsel" min="${_minD}" max="${_maxD}" value="${_curD}"
-      onchange="if(this.value) onDate(this.value)"
-      style="flex:1;padding:7px 8px;border-radius:8px;border:1px solid #EBEBEF;background:#F7F8FA;color:#1A1A2E;font-size:13px;font-family:inherit;outline:none;-webkit-appearance:none">
-    <div class="mob-persona">
+    <div class="mob-persona" style="width:100%;justify-content:center">
       <button class="mob-pbtn ${S.persona==='todos'?'on':''}" onclick="setP('todos')">Todos</button>
       <button class="mob-pbtn ${S.persona==='PN'?'on':''}" onclick="setP('PN')">PN</button>
       <button class="mob-pbtn ${S.persona==='PJ'?'on':''}" onclick="setP('PJ')">PJ</button>
     </div>
   </div>`;
 
-  // Hero — unit helpers
+  // Hero ─ formateador unificado
   const mu=S.mobUnit;
-  function scaleMob(clp){ if(mu==='usd') return clp/(r.usd||1)/1e3; if(mu==='uf') return clp/(r.uf||1); return clp/1e6; }
-  function fvMob(clp){ const v=scaleMob(clp); return mu==='clp' ? fi(Math.round(v)) : fi(Math.round(v*10)/10); }
-  function unitLblMob(){ return mu==='usd'?'USD M':mu==='uf'?'UF':'MM CLP'; }
-  // Zero-rounding fallback: when value rounds to "0" but isn't zero, show native value
-  function fvMobOrNative(clp, rawMonto, rawMoneda){
-    const val=fvMob(clp);
-    if(val==='0'&&clp!==0){
-      const m=Math.abs(parseFloat(rawMonto||0));
-      const sign=clp<0?'-':'';
-      if(rawMoneda==='CLP') return sign+fi(Math.round(m));
-      if(rawMoneda==='USD') return sign+m.toFixed(2);
-      if(rawMoneda==='UF')  return sign+m.toFixed(2);
-      return sign+fi(Math.round(Math.abs(clp)));
+  // fmt: siempre en la unidad seleccionada. CLP: MM(>=1M) | M(>=1k) | raw. USD/UF: M | raw
+  function fmt(clp, rawMonto, rawMoneda){
+    const abs=Math.abs(clp);
+    if(mu==='usd'){
+      const uv=clp/(r.usd||1), ua=Math.abs(uv);
+      if(ua>=1000) return {val:fi(Math.round(uv/1000)), lbl:'M USD'};
+      if(ua>=1)    return {val:fi(Math.round(uv)),      lbl:'USD'};
+      if(rawMoneda==='USD'&&rawMonto!=null) return {val:parseFloat(rawMonto).toFixed(2), lbl:'USD'};
+      return {val:uv.toFixed(2), lbl:'USD'};
     }
-    return val;
+    if(mu==='uf'){
+      const uv=clp/(r.uf||1), ua=Math.abs(uv);
+      if(ua>=1) return {val:fi(Math.round(uv)), lbl:'UF'};
+      if(rawMoneda==='UF'&&rawMonto!=null) return {val:parseFloat(rawMonto).toFixed(2), lbl:'UF'};
+      return {val:uv.toFixed(2), lbl:'UF'};
+    }
+    // CLP
+    if(abs>=1e6) return {val:fi(Math.round(clp/1e6)),   lbl:'MM CLP'};
+    if(abs>=1e3) return {val:fi(Math.round(clp/1e3)),   lbl:'M CLP'};
+    if(rawMoneda==='CLP'&&rawMonto!=null) return {val:fi(Math.round(parseFloat(rawMonto))), lbl:'CLP'};
+    return {val:fi(Math.round(clp)), lbl:'CLP'};
   }
-  function uLblForItem(clp, rawMoneda){
-    const val=fvMob(clp);
-    if(val==='0'&&clp!==0) return rawMoneda;
-    return unitLblMob();
-  }
-  function fvMobCat(clp){
-    const val=fvMob(clp);
-    if(val==='0'&&clp!==0) return fi(Math.round(Math.abs(clp)));
-    return val;
-  }
-  function uLblCat(clp){
-    const val=fvMob(clp);
-    if(val==='0'&&clp!==0) return 'CLP';
-    return unitLblMob();
-  }
+  function unitLblMob(){ return mu==='usd'?'M USD':mu==='uf'?'UF':'MM CLP'; }
 
   // Hero card
   const totMM=fi(Math.round(totClp/1e6));
   const totUSD=fi(Math.round(totClp/(r.usd||1)/1e3));
   const totUF=fi(Math.round(totClp/(r.uf||1)));
-  const invMM=fi(Math.round(invClp/1e6));
-  const invScaled=fvMob(invClp);
+  const {val:invScaled, lbl:invLbl}=fmt(invClp, null, null);
 
   function chip(unit, lbl, val, suffix, color){
     const active=mu===unit;
@@ -1899,7 +1892,7 @@ function renderSummaryMob(){
     </div>
     <div class="mob-hero-inv">
       <span class="mob-hero-inv-lbl">Patrimonio Inversiones</span>
-      <span class="mob-hero-inv-val">${invScaled}<span style="font-size:11px;opacity:.6;margin-left:3px">${unitLblMob()}</span></span>
+      <span class="mob-hero-inv-val">${invScaled}<b style="font-size:11px;opacity:.7;margin-left:3px;font-weight:700"> ${invLbl}</b></span>
     </div>
   </div>`;
 
@@ -1914,14 +1907,13 @@ function renderSummaryMob(){
     const neg=clp<0;
     const rid='mc'+idx;
     const pct=fPct(clp,totClp);
-    const catVal=fvMobCat(clp);
-    const uLbl=uLblCat(clp);
+    const {val:catVal, lbl:catLbl}=fmt(clp, null, null);
     h+=`<div class="mob-catrow">
       <div class="mob-cathead" onclick="mobXp('${rid}')">
         <span class="mob-cdot" style="background:${color}"></span>
         <span class="mob-catname">${cat}</span>
         <div class="mob-catnums">
-          <div class="mob-catmm ${neg?'vn':'vp'}">${catVal}<span style="font-size:11px;font-weight:400;opacity:.7"> ${uLbl}</span></div>
+          <div class="mob-catmm ${neg?'vn':'vp'}">${catVal}<b style="font-size:11px;font-weight:700;opacity:.7"> ${catLbl}</b></div>
           <div class="mob-catpct">${pct}</div>
         </div>
         <span class="mob-caret" id="mcar-${rid}">▶</span>
@@ -1929,8 +1921,7 @@ function renderSummaryMob(){
       <div class="mob-items" id="mitems-${rid}">`;
     [...items].sort((a,b)=>b.clp-a.clp).forEach(it=>{
       const ineg=it.clp<0;
-      const itemVal=fvMobOrNative(it.clp, it.monto, it.moneda);
-      const iULbl=uLblForItem(it.clp, it.moneda);
+      const {val:itemVal, lbl:iLbl}=fmt(it.clp, it.monto, it.moneda);
       h+=`<div class="mob-item">
         <div class="mob-item-info">
           <div class="mob-item-top">
@@ -1940,7 +1931,7 @@ function renderSummaryMob(){
           <div class="mob-item-sub">${it.item||'—'} · ${it.moneda}</div>
         </div>
         <div class="mob-item-right">
-          <div class="mob-item-clp ${ineg?'vn':'vp'}">${itemVal} ${iULbl}</div>
+          <div class="mob-item-clp ${ineg?'vn':'vp'}">${itemVal} <b style="font-weight:700">${iLbl}</b></div>
           <div class="mob-item-ts">${fmtTs(tsOf(it))}</div>
         </div>
       </div>`;
