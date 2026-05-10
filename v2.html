@@ -468,7 +468,6 @@ tr.rcg td{padding:7px 14px;border-bottom:1px solid #F2F2F5;color:#888;font-size:
   <div class="tabs" id="mainTabs">
     <button class="tab on" onclick="setView('summary')">Patrimonio</button>
     <button class="tab" onclick="setView('caja')">Caja</button>
-    <button class="tab" onclick="setView('comparar')">Comparar</button>
   </div>
 
   <!-- Sub-tabs Patrimonio -->
@@ -513,9 +512,6 @@ tr.rcg td{padding:7px 14px;border-bottom:1px solid #F2F2F5;color:#888;font-size:
   </button>
   <button class="mob-nb" id="mnb1" onclick="mobNav('caja')">
     <span class="mob-nb-icon"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="5" width="16" height="11" rx="2" stroke="currentColor" stroke-width="1.6" fill="none"/><path d="M2 8h16" stroke="currentColor" stroke-width="1.6"/><circle cx="6" cy="12" r="1.2" fill="currentColor"/></svg></span>Caja
-  </button>
-  <button class="mob-nb" id="mnb2" onclick="mobNav('comparar')">
-    <span class="mob-nb-icon"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 14 L4 6 M4 6 L7 9 M4 6 L1 9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 6 L16 14 M16 14 L13 11 M16 14 L19 11" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><line x1="8" y1="10" x2="12" y2="10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span>Comparar
   </button>
 </div>
 
@@ -734,13 +730,13 @@ function setView(v){
   S.mainView=v;
   // Main tabs
   document.querySelectorAll('#mainTabs .tab').forEach((t,i)=>
-    t.classList.toggle('on',['summary','caja','comparar'][i]===v));
+    t.classList.toggle('on',['summary','caja'][i]===v));
   // Sub-tabs visibility
-  document.getElementById('subPatrimonio').classList.toggle('view-hidden', v==='caja'||v==='comparar');
+  document.getElementById('subPatrimonio').classList.toggle('view-hidden', v==='caja');
   document.getElementById('subCaja').classList.toggle('view-hidden', v!=='caja');
   // Filtro PN/PJ solo en vistas de patrimonio (summary y detail)
   document.getElementById('personaTabs').classList.toggle('view-hidden', v!=='summary'&&v!=='detail');
-  document.getElementById('dsel').parentElement.style.display=(v==='comparar')?'none':'flex';
+  document.getElementById('dsel').parentElement.style.display='flex';
 
   renderCurrent();
 }
@@ -1898,17 +1894,16 @@ function mobNav(view){
   // Map view to canonical state
   if(view==='summary') { S.mainView='summary'; S.subPat='summary'; }
   else if(view==='caja') { S.mainView='caja'; }
-  else if(view==='comparar') { S.mainView='comparar'; }
   // Update bottom nav active state
-  const ids=['summary','caja','comparar'];
+  const ids=['summary','caja'];
   ids.forEach((v,i)=>{ const b=document.getElementById('mnb'+i); if(b) b.classList.toggle('on',view===v); });
   renderCurrent();
 }
 
 function mobUpdateNav(){
   const v=S.mainView;
-  const key = ['summary','detail'].includes(v)?'summary': v==='caja'?'caja':'comparar';
-  ['summary','caja','comparar'].forEach((k,i)=>{
+  const key = ['summary','detail'].includes(v)?'summary':'caja';
+  ['summary','caja'].forEach((k,i)=>{
     const b=document.getElementById('mnb'+i);
     if(b) b.classList.toggle('on',key===k);
   });
