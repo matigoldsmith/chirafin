@@ -325,6 +325,27 @@ tr.rcg td{padding:7px 14px;border-bottom:1px solid #F2F2F5;color:#888;font-size:
   .mob-cupo-footer{display:flex;justify-content:space-between;font-size:11px;color:#999}
   .mob-cupo-footer span:last-child{font-weight:600;color:#1A1A2E}
 
+  /* ── TdC SUMMARY ── */
+  .tdc-summary{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:16px 18px 0}
+  .tdc-sum-card{background:#fff;border:1px solid #EBEBEF;border-radius:12px;padding:14px 18px;cursor:pointer;transition:border-color .15s;text-align:left;font-family:inherit}
+  .tdc-sum-card:hover{border-color:#5B6BF5}
+  .tdc-sum-card.pend-sum{border-top:3px solid #f85149}
+  .tdc-sum-card.ok-sum{border-top:3px solid #3fb950}
+  .tdc-sum-lbl{font-size:11px;color:#999;margin-bottom:6px}
+  .tdc-sum-num{font-size:36px;font-weight:700;line-height:1}
+  .tdc-sum-num.red{color:#f85149}
+  .tdc-sum-num.green{color:#3fb950}
+  .tdc-sum-hint{font-size:10px;color:#bbb;margin-top:5px}
+  .tdc-section-hdr{font-size:10px;font-weight:700;letter-spacing:.7px;color:#999;text-transform:uppercase;padding:14px 18px 6px}
+  .mob-tdc-summary{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+  .mob-tdc-sum{background:#fff;border:1px solid #EBEBEF;border-radius:12px;padding:12px 14px;cursor:pointer;text-align:left;font-family:inherit}
+  .mob-tdc-sum.pend-sum{border-top:3px solid #f85149}
+  .mob-tdc-sum.ok-sum{border-top:3px solid #3fb950}
+  .mob-tdc-sum-lbl{font-size:10px;color:#999;margin-bottom:4px}
+  .mob-tdc-sum-num{font-size:28px;font-weight:700;line-height:1}
+  .mob-tdc-sum-num.red{color:#f85149}
+  .mob-tdc-sum-num.green{color:#3fb950}
+  .mob-tdc-sum-hint{font-size:10px;color:#bbb;margin-top:4px}
   /* ── PAGOS ── */
   .mob-pago-section-hdr{font-size:10px;text-transform:uppercase;letter-spacing:.7px;font-weight:700;color:#999;padding:6px 0 8px}
   .mob-pago{background:#FFFFFF;border:1px solid #EBEBEF;border-radius:12px;padding:14px;margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,.04)}
@@ -415,7 +436,6 @@ tr.rcg td{padding:7px 14px;border-bottom:1px solid #F2F2F5;color:#888;font-size:
   <!-- Sub-tabs Caja -->
   <div class="tabs view-hidden" id="subCaja">
     <button class="tab sub on" onclick="setSubCaja('activos')">Activos/Pasivos</button>
-    <button class="tab sub" onclick="setSubCaja('cupos')">Cupos TdC</button>
     <button class="tab sub" onclick="setSubCaja('pagos')">Pagos TdC</button>
   </div>
 
@@ -691,7 +711,7 @@ function setSubPat(v){
 function setSubCaja(v){
   S.subCaja=v;
   document.querySelectorAll('#subCaja .tab').forEach((t,i)=>
-    t.classList.toggle('on',['activos','cupos','pagos'][i]===v));
+    t.classList.toggle('on',['activos','pagos'][i]===v));
   renderCurrent();
 }
 
@@ -733,7 +753,6 @@ function renderCurrent(){
   else if(v==='detail') renderDetail();
   else if(v==='caja') {
     if(S.subCaja==='activos') renderCaja();
-    else if(S.subCaja==='cupos') renderCupos();
     else renderPagos();
   }
   else if(v==='comparar') renderComparar();
@@ -1186,23 +1205,20 @@ function saveCupo(key,val){
 }
 
 // ─────────────────────────────────────────
-// VIEW: PAGOS TdC (show_pagos_tdc replica)
-// Reads pagos_tdc from Supabase
+// VIEW: TdC COMBINADO (deuda + pagos por tarjeta)
 // ─────────────────────────────────────────
 async function renderPagos(){
   if(S.pagos===null){
-    document.getElementById('tw').innerHTML=`<div class="sb"><div class="spin"></div><div>Cargando pagos TdC…</div></div>`;
-    try{
-      S.pagos=await getPagos();
-    }catch(e){
-      document.getElementById('tw').innerHTML=`<div class="info-box">⚠️ No se pudo cargar la tabla pagos_tdc desde Supabase.<br><small style="color:#6e7681">Los pagos de tarjetas se registran localmente mediante el script Python.</small></div>`;
+    document.getElementById('tw').innerHTML=`<div class="sb"><div class="spin"></div><div>Cargando TdC…</div></div>`;
+    try{ S.pagos=await getPagos(); }
+    catch(e){
+      document.getElementById('tw').innerHTML=`<div class="info-box">⚠️ No se pudo cargar pagos TdC.</div>`;
       return;
     }
   }
-
-  const rows=S.pagos;
-  if(!rows||rows.length===0){
-    document.getElementById('tw').innerHTML=`<div class="info-box">Sin datos de pagos TdC.<br><small style="color:#6e7681">Ejecuta el script Python para registrar pagos de tarjetas.</small></div>`;
+  const rows=S.pagos||[];
+  if(!rows.length){
+    document.getElementById('tw').innerHTML=`<div class="info-box">Sin datos de TdC.</div>`;
     return;
   }
 
@@ -1212,67 +1228,110 @@ async function renderPagos(){
     const k=(r.institucion||'')+'|'+(r.card_number||'');
     if(!latest[k]||r.timestamp>latest[k].timestamp) latest[k]=r;
   });
-  const data=Object.values(latest);
 
-  // Classify: pendientes vs al_dia
+  // Match pagos rows with saldo rows (TdC items from S.raw)
+  const tdcRows=processRows(S.raw,'todos').filter(r=>(r.item||'').includes('TdC')||(r.categoria||'').includes('TdC'));
+  const saldoByCard={};
+  tdcRows.forEach(r=>{
+    const m=(r.item||'').match(/(\d{4})$/);
+    if(m) saldoByCard[m[1]]={clp:r.clp, item:r.item};
+  });
+
   const MESES=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
   function fdate(s){
     if(!s) return '—';
-    try{
-      const d=new Date(s.replace(/(\d{2})\/(\d{2})\/(\d{4})/,'$3-$2-$1'));
-      return `${String(d.getDate()).padStart(2,'0')}-${MESES[d.getMonth()]}`;
-    }catch(e){return s.slice(0,8)||'—'}
+    try{ const d=new Date(s.replace(/(\d{2})\/(\d{2})\/(\d{4})/,'$3-$2-$1'));
+      return `${String(d.getDate()).padStart(2,'0')}-${MESES[d.getMonth()]}`; }
+    catch(e){ return s.slice(0,8)||'—' }
   }
-  function fclp2(n){if(!n||n===0) return '—'; return fi(Math.round(+n));}
-  function fusd(n){if(!n||n===0) return '—'; return (+n).toFixed(2);}
+  function fv(n){ if(n==null||+n===0) return '—'; return fi(Math.round(+n)); }
 
-  const pendientes=[], al_dia=[];
-  data.forEach(r=>{
-    const paid_clp=r.pagado_clp!=null?+r.pagado_clp:(+r.no_facturado_clp||0);
-    const paid_usd=+(r.pagado_usd||0);
-    const delta_clp=(+(r.facturado_clp||0))-paid_clp;
-    const delta_usd=(+(r.facturado_usd||0))-paid_usd;
-    const entry={...r, paid_clp, paid_usd, delta_clp, delta_usd};
-    if(delta_clp>0||delta_usd>0) pendientes.push(entry);
-    else al_dia.push(entry);
+  const data=Object.values(latest).map(r=>{
+    const paid=r.pagado_clp!=null?+r.pagado_clp:(+r.no_facturado_clp||0);
+    const delta=(+(r.facturado_clp||0))-paid;
+    const sal=saldoByCard[r.card_number];
+    const deuda=sal?Math.abs(sal.clp):null;
+    const item=sal?sal.item:'TdC '+r.card_number;
+    const cupoKey=(r.institucion||'')+'|'+item;
+    const cupo=+(S.cupos[cupoKey]||0);
+    return {...r, _paid:paid, _delta:delta, _deuda:deuda, _item:item, _cupo:cupo,
+      _disp:cupo?(cupo-(deuda||0)):null,
+      _pctUso:(cupo&&deuda)?Math.round(deuda/cupo*100):null};
   });
-  pendientes.sort((a,b)=>(a.pagar_hasta||'').localeCompare(b.pagar_hasta||''));
-  al_dia.sort((a,b)=>(a.pagar_hasta||'').localeCompare(b.pagar_hasta||''));
 
-  function makeTable(title,entries,color){
-    if(!entries.length) return '';
-    let t=`<div style="margin-bottom:14px"><div style="padding:8px 14px;background:#21262d;font-weight:700;color:${color};font-size:12px;border-radius:10px 10px 0 0;border:1px solid #30363d;border-bottom:none">${title}</div>
-    <div class="tw" style="border-radius:0 0 10px 10px"><table><thead><tr>
-      <th class="thl">Banco</th><th class="thl">Tarjeta</th>
-      <th>Facturado</th><th>Fac. CLP</th><th>Fac. USD</th>
-      <th>Pag. CLP</th><th>Pag. USD</th>
-      <th>Δ CLP</th><th>Δ USD</th>
-      <th>Pagar hasta</th><th class="thl">Actualizado</th>
-    </tr></thead><tbody>`;
-    entries.forEach(r=>{
-      const cc=r.delta_clp>0?'vn':'vp';
-      const cu=r.delta_usd>0?'vn':'vp';
-      t+=`<tr class="plain">
-        <td class="tdl">${r.institucion||'—'}</td>
-        <td class="tdl" style="color:#8b949e">${(r.card_name||'Visa')+' '+r.card_number}</td>
-        <td class="dim">${fdate(r.periodo_hasta)}</td>
-        <td class="vw">${fclp2(r.facturado_clp)}</td>
-        <td class="vw">${fusd(r.facturado_usd)}</td>
-        <td class="dim">${fclp2(r.paid_clp)}</td>
-        <td class="dim">${fusd(r.paid_usd)}</td>
-        <td class="${cc}">${fclp2(r.delta_clp)}</td>
-        <td class="${cu}">${fusd(r.delta_usd)}</td>
-        <td class="dim">${fdate(r.pagar_hasta)}</td>
-        <td class="tdl dim" style="font-size:11px">${fmtTs(r.timestamp)}</td>
-      </tr>`;
-    });
-    t+=`</tbody></table></div></div>`;
-    return t;
-  }
+  // Sort: pendientes first (by pagar_hasta), then al_dia
+  data.sort((a,b)=>{
+    const ap=a._delta>0?0:1, bp=b._delta>0?0:1;
+    if(ap!==bp) return ap-bp;
+    return (a.pagar_hasta||'').localeCompare(b.pagar_hasta||'');
+  });
 
-  document.getElementById('tw').innerHTML=
-    makeTable('PENDIENTES', pendientes, '#f85149')+
-    makeTable('AL DÍA', al_dia, '#3fb950');
+  function makeCard(r){
+    const pend=r._delta>0;
+    const dc=r._disp!=null?(r._disp>=0?'vp':'vn'):'dim';
+    const pc=r._pctUso!=null?(r._pctUso<70?'vp':r._pctUso<90?'dim':'vn'):'dim';
+    const footer=r._cupo?`<div class="tdc-footer">
+      <div class="tdc-foot-item">
+        <div class="tdc-foot-lbl">Disponible</div>
+        <div class="tdc-foot-val ${dc}">${r._disp!=null?fi(Math.round(Math.abs(r._disp))):'—'}</div>
+      </div>
+      <div class="tdc-foot-item">
+        <div class="tdc-foot-lbl">% Uso</div>
+        <div class="tdc-foot-val ${pc}">${r._pctUso!=null?r._pctUso+'%':'—'}</div>
+      </div>
+      <div class="tdc-foot-item">
+        <div class="tdc-foot-lbl">Cupo total</div>
+        <div class="tdc-foot-val dim">${fi(r._cupo)}</div>
+      </div>
+    </div>`:'';
+    return `<div class="tdc-card">
+      <div class="tdc-card-hdr">
+        <div>
+          <div class="tdc-card-name">${r.institucion||'—'}</div>
+          <div class="tdc-card-sub">${r.card_name||'Visa'} ****${r.card_number} · Pagar hasta ${fdate(r.pagar_hasta)}</div>
+        </div>
+        <span class="tdc-status ${pend?'pend':'ok'}">${pend?'PENDIENTE':'AL DÍA'}</span>
+      </div>
+      <div class="tdc-body">
+        <div class="tdc-field">
+          <div class="tdc-field-lbl">Facturado · ${fdate(r.periodo_hasta)}</div>
+          <div class="tdc-field-val">${fv(r.facturado_clp)}</div>
+        </div>
+        <div class="tdc-field">
+          <div class="tdc-field-lbl">Pag. no facturados</div>
+          <div class="tdc-field-val dim">${fv(r.no_facturado_clp)}</div>
+        </div>
+        <div class="tdc-field" style="border-bottom:none">
+          <div class="tdc-field-lbl">Deuda total</div>
+          <div class="tdc-field-val vn">${r._deuda!=null?fi(Math.round(r._deuda)):'—'}</div>
+        </div>
+        <div class="tdc-field" style="border-bottom:none">
+          <div class="tdc-field-lbl">A pagar</div>
+          <div class="tdc-field-val ${pend?'vn':'vp'}">${pend?fi(Math.round(r._delta)):'✓ Al día'}</div>
+        </div>
+      </div>
+      ${footer}
+    </div>`;
+    }
+  const nPend=data.filter(r=>r._delta>0).length;
+  const nOk=data.length-nPend;
+  const pendCards=data.filter(r=>r._delta>0).map(makeCard).join('');
+  const okCards=data.filter(r=>r._delta<=0).map(makeCard).join('');
+  const summary=`<div class="tdc-summary">
+    <button class="tdc-sum-card pend-sum" onclick="document.getElementById('tdc-pend')?.scrollIntoView({behavior:'smooth',block:'start'})">
+      <div class="tdc-sum-lbl">Pago pendiente</div>
+      <div class="tdc-sum-num red">${nPend}</div>
+      <div class="tdc-sum-hint">${nPend===0?'Todo al d\u00eda \u2713':nPend===1?'1 tarjeta':nPend+' tarjetas'}</div>
+    </button>
+    <button class="tdc-sum-card ok-sum" onclick="document.getElementById('tdc-ok')?.scrollIntoView({behavior:'smooth',block:'start'})">
+      <div class="tdc-sum-lbl">Pagos al d\u00eda</div>
+      <div class="tdc-sum-num green">${nOk}</div>
+      <div class="tdc-sum-hint">${nOk===1?'1 tarjeta':nOk+' tarjetas'}</div>
+    </button>
+  </div>
+  ${nPend>0?`<div class="tdc-section-hdr" id="tdc-pend">PENDIENTES</div><div class="tdc-grid">${pendCards}</div>`:''}
+  ${nOk>0?`<div class="tdc-section-hdr" id="tdc-ok">AL D\u00cdA</div><div class="tdc-grid">${okCards}</div>`:''}`;
+  document.getElementById('tw').innerHTML=summary;
 }
 
 // ─────────────────────────────────────────
@@ -1978,7 +2037,6 @@ function renderCajaMob(){
 
   const subtabs=`<div class="mob-subtabs">
     <button class="mob-stab ${S.subCaja==='activos'?'on':''}" onclick="setSubCaja('activos')">Activos/Pasivos</button>
-    <button class="mob-stab ${S.subCaja==='cupos'?'on':''}" onclick="setSubCaja('cupos')">Cupos TdC</button>
     <button class="mob-stab ${S.subCaja==='pagos'?'on':''}" onclick="setSubCaja('pagos')">Pagos TdC</button>
   </div>`;
 
@@ -2019,8 +2077,7 @@ function renderCuposMob(){
   tdc.sort((a,b)=>Math.abs(b.clp)-Math.abs(a.clp));
   const subtabs=`<div class="mob-subtabs">
     <button class="mob-stab" onclick="setSubCaja('activos')">Activos/Pasivos</button>
-    <button class="mob-stab on" onclick="setSubCaja('cupos')">Cupos TdC</button>
-    <button class="mob-stab" onclick="setSubCaja('pagos')">Pagos TdC</button>
+    <button class="mob-stab on" onclick="setSubCaja('pagos')">Pagos TdC</button>
   </div>`;
   let h=subtabs;
   tdc.forEach(r=>{
@@ -2050,59 +2107,110 @@ function renderCuposMob(){
 }
 
 // ─────────────────────────────────────────
-// MOBILE: PAGOS TdC
+// MOBILE: TdC COMBINADO
 // ─────────────────────────────────────────
 async function renderPagosMob(){
   const subtabs=`<div class="mob-subtabs">
     <button class="mob-stab" onclick="setSubCaja('activos')">Activos/Pasivos</button>
-    <button class="mob-stab" onclick="setSubCaja('cupos')">Cupos TdC</button>
     <button class="mob-stab on" onclick="setSubCaja('pagos')">Pagos TdC</button>
   </div>`;
   if(S.pagos===null){
-    document.getElementById('tw').innerHTML=subtabs+`<div class="sb"><div class="spin"></div><div>Cargando pagos…</div></div>`;
-    try{ S.pagos=await getPagos(); } catch(e){ document.getElementById('tw').innerHTML=subtabs+`<div class="mob-sec-title">No se pudo cargar pagos TdC</div>`; return; }
+    document.getElementById('tw').innerHTML=subtabs+`<div class="sb"><div class="spin"></div><div>Cargando TdC…</div></div>`;
+    try{ S.pagos=await getPagos(); } catch(e){ document.getElementById('tw').innerHTML=subtabs+`<div class="mob-sec-title">No se pudo cargar TdC</div>`; return; }
   }
   const rows=S.pagos||[];
-  const MESES=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-  function fdate(s){ if(!s) return '—'; try{ const d=new Date(s.replace(/(\d{2})\/(\d{2})\/(\d{4})/,'$3-$2-$1')); return `${String(d.getDate()).padStart(2,'0')}-${MESES[d.getMonth()]}`; }catch(e){return s.slice(0,8)||'—'} }
-  function fc2(n){ if(!n||n===0) return '—'; return fi(Math.round(+n)); }
   const latest={};
   rows.forEach(r=>{ const k=(r.institucion||'')+'|'+(r.card_number||''); if(!latest[k]||r.timestamp>latest[k].timestamp) latest[k]=r; });
-  const data=Object.values(latest);
-  const pendientes=[], al_dia=[];
-  data.forEach(r=>{
-    const paid_clp=r.pagado_clp!=null?+r.pagado_clp:(+r.no_facturado_clp||0);
-    const delta_clp=(+(r.facturado_clp||0))-paid_clp;
-    const delta_usd=(+(r.facturado_usd||0))-(+(r.pagado_usd||0));
-    const entry={...r, paid_clp, delta_clp, delta_usd};
-    if(delta_clp>0||delta_usd>0) pendientes.push(entry); else al_dia.push(entry);
+
+  // Match with saldo rows
+  const tdcRows=processRows(S.raw,'todos').filter(r=>(r.item||'').includes('TdC')||(r.categoria||'').includes('TdC'));
+  const saldoByCard={};
+  tdcRows.forEach(r=>{ const m=(r.item||'').match(/(\d{4})$/); if(m) saldoByCard[m[1]]={clp:r.clp, item:r.item}; });
+
+  const MESES=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  function fdate(s){ if(!s) return '—'; try{ const d=new Date(s.replace(/(\d{2})\/(\d{2})\/(\d{4})/,'$3-$2-$1')); return `${String(d.getDate()).padStart(2,'0')}-${MESES[d.getMonth()]}`; }catch(e){ return s.slice(0,8)||'—' } }
+  function fv(n){ if(n==null||+n===0) return '—'; return fi(Math.round(+n)); }
+
+  const data=Object.values(latest).map(r=>{
+    const paid=r.pagado_clp!=null?+r.pagado_clp:(+r.no_facturado_clp||0);
+    const delta=(+(r.facturado_clp||0))-paid;
+    const sal=saldoByCard[r.card_number];
+    const deuda=sal?Math.abs(sal.clp):null;
+    const item=sal?sal.item:'TdC '+r.card_number;
+    const cupoKey=(r.institucion||'')+'|'+item;
+    const cupo=+(S.cupos[cupoKey]||0);
+    return {...r, _paid:paid, _delta:delta, _deuda:deuda, _item:item, _cupo:cupo,
+      _disp:cupo?(cupo-(deuda||0)):null,
+      _pctUso:(cupo&&deuda)?Math.round(deuda/cupo*100):null};
   });
-  pendientes.sort((a,b)=>(a.pagar_hasta||'').localeCompare(b.pagar_hasta||''));
-  al_dia.sort((a,b)=>(a.pagar_hasta||'').localeCompare(b.pagar_hasta||''));
-  function makeCards(list, color, title){
-    if(!list.length) return '';
-    let s=`<div class="mob-pago-section-hdr" style="color:${color}">${title}</div>`;
-    list.forEach(r=>{
-      const cc=r.delta_clp>0?'vn':'vp';
-      s+=`<div class="mob-pago">
-        <div class="mob-pago-top">
-          <div class="mob-pago-left">
-            <div class="mob-pago-inst">${r.institucion||'—'}</div>
-            <div class="mob-pago-card">${(r.card_name||'Visa')+' ****'+r.card_number}</div>
-          </div>
-          <div><div class="mob-pago-delta ${cc}">${r.delta_clp>0?fi(r.delta_clp):r.delta_usd>0?'USD '+r.delta_usd.toFixed(2):'✓'}</div></div>
+  data.sort((a,b)=>{ const ap=a._delta>0?0:1, bp=b._delta>0?0:1; if(ap!==bp) return ap-bp; return (a.pagar_hasta||'').localeCompare(b.pagar_hasta||''); });
+
+  function makeCard(r){
+    const pend=r._delta>0;
+    const dc=r._disp!=null?(r._disp>=0?'vp':'vn'):'dim';
+    const pc=r._pctUso!=null?(r._pctUso<70?'vp':r._pctUso<90?'dim':'vn'):'dim';
+    const footer=r._cupo?`<div class="mob-tdc-footer">
+      <div class="mob-tdc-foot">
+        <div class="mob-tdc-foot-lbl">Disponible</div>
+        <div class="mob-tdc-foot-val ${dc}">${r._disp!=null?fi(Math.round(Math.abs(r._disp))):'—'}</div>
+      </div>
+      <div class="mob-tdc-foot">
+        <div class="mob-tdc-foot-lbl">% Uso</div>
+        <div class="mob-tdc-foot-val ${pc}">${r._pctUso!=null?r._pctUso+'%':'—'}</div>
+      </div>
+      <div class="mob-tdc-foot">
+        <div class="mob-tdc-foot-lbl">Cupo total</div>
+        <div class="mob-tdc-foot-val dim">${fi(r._cupo)}</div>
+      </div>
+    </div>`:'';
+    return `<div class="mob-tdc-card">
+      <div class="mob-tdc-hdr">
+        <div>
+          <div class="mob-tdc-name">${r.institucion||'—'}</div>
+          <div class="mob-tdc-sub">${r.card_name||'Visa'} ****${r.card_number} · Pagar ${fdate(r.pagar_hasta)}</div>
         </div>
-        <div class="mob-pago-rows">
-          <div class="mob-pago-field"><div class="mob-pago-field-lbl">Facturado</div><div class="mob-pago-field-val">${fc2(r.facturado_clp)}</div></div>
-          <div class="mob-pago-field"><div class="mob-pago-field-lbl">Pagado</div><div class="mob-pago-field-val">${fc2(r.paid_clp)}</div></div>
-          <div class="mob-pago-field"><div class="mob-pago-field-lbl">Período</div><div class="mob-pago-field-val">${fdate(r.periodo_hasta)}</div></div>
-          <div class="mob-pago-field"><div class="mob-pago-field-lbl">Pagar hasta</div><div class="mob-pago-field-val" style="color:${r.delta_clp>0?'#f85149':'#8b949e'}">${fdate(r.pagar_hasta)}</div></div>
+        <span class="tdc-status ${pend?'pend':'ok'}">${pend?'PENDIENTE':'AL DÍA'}</span>
+      </div>
+      <div class="mob-tdc-body">
+        <div class="mob-tdc-field">
+          <div class="mob-tdc-lbl">Facturado · ${fdate(r.periodo_hasta)}</div>
+          <div class="mob-tdc-val">${fv(r.facturado_clp)}</div>
         </div>
-      </div>`;
-    });
-    return s;
-  }
-  document.getElementById('tw').innerHTML=subtabs+makeCards(pendientes,'#f85149','Pendientes')+makeCards(al_dia,'#3fb950','Al Día');
+        <div class="mob-tdc-field">
+          <div class="mob-tdc-lbl">Pag. no facturados</div>
+          <div class="mob-tdc-val dim">${fv(r.no_facturado_clp)}</div>
+        </div>
+        <div class="mob-tdc-field" style="border-bottom:none">
+          <div class="mob-tdc-lbl">Deuda total</div>
+          <div class="mob-tdc-val vn">${r._deuda!=null?fi(Math.round(r._deuda)):'—'}</div>
+        </div>
+        <div class="mob-tdc-field" style="border-bottom:none">
+          <div class="mob-tdc-lbl">A pagar</div>
+          <div class="mob-tdc-val ${pend?'vn':'vp'}">${pend?fi(Math.round(r._delta)):'✓'}</div>
+        </div>
+      </div>
+      ${footer}
+    </div>`;
+    }
+  const nPend=data.filter(r=>r._delta>0).length;
+  const nOk=data.length-nPend;
+  const pendCards=data.filter(r=>r._delta>0).map(makeCard).join('');
+  const okCards=data.filter(r=>r._delta<=0).map(makeCard).join('');
+  const summary=`<div class="mob-tdc-summary">
+    <button class="mob-tdc-sum pend-sum" onclick="document.getElementById('mob-tdc-pend')?.scrollIntoView({behavior:'smooth',block:'start'})">
+      <div class="mob-tdc-sum-lbl">Pago pendiente</div>
+      <div class="mob-tdc-sum-num red">${nPend}</div>
+      <div class="mob-tdc-sum-hint">${nPend===0?'Todo al d\u00eda \u2713':nPend+' tarjeta'+( nPend===1?'':'s')}</div>
+    </button>
+    <button class="mob-tdc-sum ok-sum" onclick="document.getElementById('mob-tdc-ok')?.scrollIntoView({behavior:'smooth',block:'start'})">
+      <div class="mob-tdc-sum-lbl">Pagos al d\u00eda</div>
+      <div class="mob-tdc-sum-num green">${nOk}</div>
+      <div class="mob-tdc-sum-hint">${nOk+' tarjeta'+(nOk===1?'':'s')}</div>
+    </button>
+  </div>
+  ${nPend>0?`<div class="mob-sec-title" id="mob-tdc-pend">Pendientes</div>${pendCards}`:''}
+  ${nOk>0?`<div class="mob-sec-title" id="mob-tdc-ok">Al d\u00eda</div>${okCards}`:''}`;
+  document.getElementById('tw').innerHTML=subtabs+summary;
 }
 
 // ─────────────────────────────────────────
@@ -2256,7 +2364,7 @@ renderCurrent = function(){
   if(v==='summary'||v==='detail') renderSummaryMob();
   else if(v==='caja'){
     if(S.subCaja==='activos') renderCajaMob();
-    else if(S.subCaja==='cupos') renderCuposMob();
+    
     else renderPagosMob();
   }
   else if(v==='comparar') renderCompararMob();
