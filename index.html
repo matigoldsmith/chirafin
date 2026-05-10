@@ -157,6 +157,42 @@ tr.rcg td{padding:7px 14px;border-bottom:1px solid #F2F2F5;color:#888;font-size:
 .mob-hdr,.mob-nav{display:none}
 .mob-only{display:none}
 
+/* ── TdC COMBINED VIEW ── */
+.tdc-summary{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:16px 18px 0}
+.tdc-sum-card{background:#fff;border:1px solid #EBEBEF;border-radius:12px;padding:14px 18px;cursor:pointer;transition:border-color .15s;text-align:left;font-family:inherit}
+.tdc-sum-card:hover{border-color:#5B6BF5}
+.tdc-sum-card.pend-sum{border-top:3px solid #f85149}
+.tdc-sum-card.ok-sum{border-top:3px solid #3fb950}
+.tdc-sum-lbl{font-size:11px;color:#999;margin-bottom:6px}
+.tdc-sum-num{font-size:36px;font-weight:700;line-height:1}
+.tdc-sum-num.red{color:#f85149}
+.tdc-sum-num.green{color:#3fb950}
+.tdc-sum-hint{font-size:10px;color:#bbb;margin-top:5px}
+.tdc-section-hdr{font-size:10px;font-weight:700;letter-spacing:.7px;color:#999;text-transform:uppercase;padding:14px 18px 6px}
+.tdc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;padding:0 18px 18px}
+.tdc-card{background:#fff;border:1px solid #EBEBEF;border-radius:12px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.04)}
+.tdc-card-hdr{display:flex;justify-content:space-between;align-items:flex-start;padding:14px 16px 10px;border-bottom:1px solid #EBEBEF}
+.tdc-card-name{font-size:14px;font-weight:600;color:#1A1A2E}
+.tdc-card-sub{font-size:11px;color:#999;margin-top:2px}
+.tdc-status{font-size:10px;font-weight:700;padding:3px 8px;border-radius:20px;white-space:nowrap;letter-spacing:.3px}
+.tdc-status.pend{background:rgba(248,81,73,.12);color:#f85149}
+.tdc-status.ok{background:rgba(63,185,80,.12);color:#3fb950}
+.tdc-body{padding:8px 16px}
+.tdc-field{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid #f0f0f0}
+.tdc-field:last-child{border-bottom:none}
+.tdc-field-lbl{font-size:12px;color:#888}
+.tdc-field-val{font-size:13px;font-weight:600;color:#1A1A2E}
+.tdc-field-val.vn{color:#f85149}
+.tdc-field-val.vp{color:#3fb950}
+.tdc-field-val.dim{color:#aaa}
+.tdc-footer{background:#F7F8FA;border-top:1px solid #EBEBEF;padding:10px 16px;display:grid;grid-template-columns:repeat(3,1fr);gap:4px;text-align:center}
+.tdc-foot-item{display:flex;flex-direction:column;align-items:center}
+.tdc-foot-lbl{font-size:10px;color:#aaa}
+.tdc-foot-val{font-size:12px;font-weight:600;color:#1A1A2E;margin-top:2px}
+.tdc-foot-val.vn{color:#f85149}
+.tdc-foot-val.vp{color:#3fb950}
+.tdc-foot-val.dim{color:#aaa}
+
 /* ════════════════════════════════════
    MOBILE — FINTUAL STYLE
    ════════════════════════════════════ */
@@ -325,41 +361,6 @@ tr.rcg td{padding:7px 14px;border-bottom:1px solid #F2F2F5;color:#888;font-size:
   .mob-cupo-footer{display:flex;justify-content:space-between;font-size:11px;color:#999}
   .mob-cupo-footer span:last-child{font-weight:600;color:#1A1A2E}
 
-  /* ── TdC SUMMARY ── */
-  .tdc-summary{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:16px 18px 0}
-  .tdc-sum-card{background:#fff;border:1px solid #EBEBEF;border-radius:12px;padding:14px 18px;cursor:pointer;transition:border-color .15s;text-align:left;font-family:inherit}
-  .tdc-sum-card:hover{border-color:#5B6BF5}
-  .tdc-sum-card.pend-sum{border-top:3px solid #f85149}
-  .tdc-sum-card.ok-sum{border-top:3px solid #3fb950}
-  .tdc-sum-lbl{font-size:11px;color:#999;margin-bottom:6px}
-  .tdc-sum-num{font-size:36px;font-weight:700;line-height:1}
-  .tdc-sum-num.red{color:#f85149}
-  .tdc-sum-num.green{color:#3fb950}
-  .tdc-sum-hint{font-size:10px;color:#bbb;margin-top:5px}
-  .tdc-section-hdr{font-size:10px;font-weight:700;letter-spacing:.7px;color:#999;text-transform:uppercase;padding:14px 18px 6px}
-  .tdc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;padding:0 18px 18px}
-  .tdc-card{background:#fff;border:1px solid #EBEBEF;border-radius:12px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.04)}
-  .tdc-card-hdr{display:flex;justify-content:space-between;align-items:flex-start;padding:14px 16px 10px;border-bottom:1px solid #EBEBEF}
-  .tdc-card-name{font-size:14px;font-weight:600;color:#1A1A2E}
-  .tdc-card-sub{font-size:11px;color:#999;margin-top:2px}
-  .tdc-status{font-size:10px;font-weight:700;padding:3px 8px;border-radius:20px;white-space:nowrap;letter-spacing:.3px}
-  .tdc-status.pend{background:rgba(248,81,73,.12);color:#f85149}
-  .tdc-status.ok{background:rgba(63,185,80,.12);color:#3fb950}
-  .tdc-body{padding:8px 16px}
-  .tdc-field{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid #f0f0f0}
-  .tdc-field:last-child{border-bottom:none}
-  .tdc-field-lbl{font-size:12px;color:#888}
-  .tdc-field-val{font-size:13px;font-weight:600;color:#1A1A2E}
-  .tdc-field-val.vn{color:#f85149}
-  .tdc-field-val.vp{color:#3fb950}
-  .tdc-field-val.dim{color:#aaa}
-  .tdc-footer{background:#F7F8FA;border-top:1px solid #EBEBEF;padding:10px 16px;display:grid;grid-template-columns:repeat(3,1fr);gap:4px;text-align:center}
-  .tdc-foot-item{display:flex;flex-direction:column;align-items:center}
-  .tdc-foot-lbl{font-size:10px;color:#aaa}
-  .tdc-foot-val{font-size:12px;font-weight:600;color:#1A1A2E;margin-top:2px}
-  .tdc-foot-val.vn{color:#f85149}
-  .tdc-foot-val.vp{color:#3fb950}
-  .tdc-foot-val.dim{color:#aaa}
   .mob-tdc-summary{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
   .mob-tdc-sum{background:#fff;border:1px solid #EBEBEF;border-radius:12px;padding:12px 14px;cursor:pointer;text-align:left;font-family:inherit}
   .mob-tdc-sum.pend-sum{border-top:3px solid #f85149}
@@ -369,6 +370,26 @@ tr.rcg td{padding:7px 14px;border-bottom:1px solid #F2F2F5;color:#888;font-size:
   .mob-tdc-sum-num.red{color:#f85149}
   .mob-tdc-sum-num.green{color:#3fb950}
   .mob-tdc-sum-hint{font-size:10px;color:#bbb;margin-top:4px}
+  .mob-tdc-section-hdr{font-size:10px;font-weight:700;letter-spacing:.7px;color:#999;text-transform:uppercase;padding:10px 0 6px}
+  .mob-tdc-card{background:#fff;border:1px solid #EBEBEF;border-radius:12px;overflow:hidden;margin-bottom:10px}
+  .mob-tdc-hdr{display:flex;justify-content:space-between;align-items:flex-start;padding:12px 14px 8px;border-bottom:1px solid #EBEBEF}
+  .mob-tdc-name{font-size:14px;font-weight:600;color:#1A1A2E}
+  .mob-tdc-sub{font-size:11px;color:#999;margin-top:2px}
+  .mob-tdc-body{padding:6px 14px}
+  .mob-tdc-field{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #f0f0f0}
+  .mob-tdc-field:last-child{border-bottom:none}
+  .mob-tdc-lbl{font-size:12px;color:#888}
+  .mob-tdc-val{font-size:13px;font-weight:600;color:#1A1A2E}
+  .mob-tdc-val.vn{color:#f85149}
+  .mob-tdc-val.vp{color:#3fb950}
+  .mob-tdc-val.dim{color:#aaa}
+  .mob-tdc-footer{background:#F7F8FA;border-top:1px solid #EBEBEF;padding:8px 14px;display:grid;grid-template-columns:repeat(3,1fr);gap:4px;text-align:center}
+  .mob-tdc-foot{display:flex;flex-direction:column;align-items:center}
+  .mob-tdc-foot-lbl{font-size:10px;color:#aaa}
+  .mob-tdc-foot-val{font-size:12px;font-weight:600;color:#1A1A2E;margin-top:2px}
+  .mob-tdc-foot-val.vn{color:#f85149}
+  .mob-tdc-foot-val.vp{color:#3fb950}
+  .mob-tdc-foot-val.dim{color:#aaa}
   /* ── PAGOS ── */
   .mob-pago-section-hdr{font-size:10px;text-transform:uppercase;letter-spacing:.7px;font-weight:700;color:#999;padding:6px 0 8px}
   .mob-pago{background:#FFFFFF;border:1px solid #EBEBEF;border-radius:12px;padding:14px;margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,.04)}
