@@ -478,7 +478,7 @@ tr.rcg td{padding:7px 14px;border-bottom:1px solid #F2F2F5;color:#888;font-size:
 
   <!-- Sub-tabs Caja -->
   <div class="tabs view-hidden" id="subCaja">
-    <button class="tab sub on" onclick="setSubCaja('activos')">Activos/Pasivos</button>
+    <button class="tab sub on" onclick="setSubCaja('activos')">Deuda TdC y Provisiones</button>
     <button class="tab sub" onclick="setSubCaja('pagos')">Pagos TdC</button>
   </div>
 
@@ -1313,7 +1313,7 @@ async function renderPagos(){
     const footer=r._cupo?`<div class="tdc-footer">
       <div class="tdc-foot-item">
         <div class="tdc-foot-lbl">Disponible</div>
-        <div class="tdc-foot-val ${dc}">${r._disp!=null?fi(Math.round(Math.abs(r._disp))):'—'}</div>
+        <div class="tdc-foot-val ${dc}">${r._disp!=null?(r._disp<0?'-':'')+fi(Math.abs(r._disp)):'—'}</div>
       </div>
       <div class="tdc-foot-item">
         <div class="tdc-foot-lbl">% Uso</div>
@@ -2075,7 +2075,7 @@ function renderCajaMob(){
   function fc(v){ const neg=v<0; return `<span class="${neg?'vn':'vp'}">${neg?'-':''}${fi(Math.abs(v))}</span>`; }
 
   const subtabs=`<div class="mob-subtabs">
-    <button class="mob-stab ${S.subCaja==='activos'?'on':''}" onclick="setSubCaja('activos')">Activos/Pasivos</button>
+    <button class="mob-stab ${S.subCaja==='activos'?'on':''}" onclick="setSubCaja('activos')">Deuda TdC y Provisiones</button>
     <button class="mob-stab ${S.subCaja==='pagos'?'on':''}" onclick="setSubCaja('pagos')">Pagos TdC</button>
   </div>`;
 
@@ -2115,7 +2115,7 @@ function renderCuposMob(){
   const tdc=rows.filter(r=>(r.item||'').includes('TdC')||(r.categoria||'').includes('TdC'));
   tdc.sort((a,b)=>Math.abs(b.clp)-Math.abs(a.clp));
   const subtabs=`<div class="mob-subtabs">
-    <button class="mob-stab" onclick="setSubCaja('activos')">Activos/Pasivos</button>
+    <button class="mob-stab" onclick="setSubCaja('activos')">Deuda TdC y Provisiones</button>
     <button class="mob-stab on" onclick="setSubCaja('pagos')">Pagos TdC</button>
   </div>`;
   let h=subtabs;
@@ -2150,7 +2150,7 @@ function renderCuposMob(){
 // ─────────────────────────────────────────
 async function renderPagosMob(){
   const subtabs=`<div class="mob-subtabs">
-    <button class="mob-stab" onclick="setSubCaja('activos')">Activos/Pasivos</button>
+    <button class="mob-stab" onclick="setSubCaja('activos')">Deuda TdC y Provisiones</button>
     <button class="mob-stab on" onclick="setSubCaja('pagos')">Pagos TdC</button>
   </div>`;
   if(S.pagos===null){
@@ -2191,7 +2191,7 @@ async function renderPagosMob(){
     const footer=r._cupo?`<div class="mob-tdc-footer">
       <div class="mob-tdc-foot">
         <div class="mob-tdc-foot-lbl">Disponible</div>
-        <div class="mob-tdc-foot-val ${dc}">${r._disp!=null?fi(Math.round(Math.abs(r._disp))):'—'}</div>
+        <div class="mob-tdc-foot-val ${dc}">${r._disp!=null?(r._disp<0?'-':'')+fi(Math.abs(r._disp)):'—'}</div>
       </div>
       <div class="mob-tdc-foot">
         <div class="mob-tdc-foot-lbl">% Uso</div>
