@@ -80,7 +80,11 @@ td.tdl{text-align:left}
 .cdot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
 .cn{font-weight:600;font-size:13px;color:#1A1A2E}
 
-.dic{display:flex;flex-direction:column;padding-left:38px}
+.dic{display:flex;align-items:center;gap:10px}
+.dic-logo{width:28px;height:28px;border-radius:7px;border:0.5px solid #EBEBEF;background:#F7F8FA;display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden}
+.dic-logo img{width:20px;height:20px;object-fit:contain;display:block}
+.dic-av{width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;flex-shrink:0;color:#fff}
+.dic-body{display:flex;flex-direction:column}
 .dr1{display:flex;align-items:center;gap:6px}
 .di{font-weight:500;color:#1A1A2E;font-size:12px}
 .ditem{color:#999;font-size:11px;margin-top:1px}
@@ -314,6 +318,9 @@ tr.rcg td{padding:7px 14px;border-bottom:1px solid #F2F2F5;color:#888;font-size:
     border-bottom:1px solid #F7F8FA;gap:10px;
   }
   .mob-item:last-child{border-bottom:none}
+  .mob-item-logo{width:32px;height:32px;border-radius:8px;border:0.5px solid #EBEBEF;background:#F7F8FA;display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden}
+  .mob-item-logo img{width:22px;height:22px;object-fit:contain;display:block}
+  .mob-item-av{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex-shrink:0;color:#fff}
   .mob-item-info{flex:1;min-width:0}
   .mob-item-top{display:flex;align-items:center;gap:6px}
   .mob-item-inst{font-size:13px;font-weight:500;color:#1A1A2E;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -882,11 +889,14 @@ function renderSummary(){
       const neg=it.clp<0;
       h+=`<tr class="dr" id="${rid}-d">
         <td><div class="dic">
-          <div class="dr1">
-            <span class="di">${it.institucion||'—'}</span>
-            <span class="bdg b${(it.persona||'pn').toLowerCase()}">${it.persona||''}</span>
+          ${instLogoDesktop(it.institucion)}
+          <div class="dic-body">
+            <div class="dr1">
+              <span class="di">${it.institucion||'—'}</span>
+              <span class="bdg b${(it.persona||'pn').toLowerCase()}">${it.persona||''}</span>
+            </div>
+            <div class="ditem">${it.item||'—'}</div>
           </div>
-          <div class="ditem">${it.item||'—'}</div>
         </div></td>
         <td class="${neg?'vn':'vp'}">${fCLPs(it.clp)}</td>
         <td class="mh ${neg?'vn':'vp'}">${fUSDs(it.clp)}</td>
@@ -914,6 +924,43 @@ function renderSummary(){
   </tr></tbody></table>`;
 
   document.getElementById('tw').innerHTML=h;
+}
+
+// ─────────────────────────────────────────
+// INST LOGOS (Clearbit)
+// ─────────────────────────────────────────
+const INST_DOMAIN={
+  'Fintual':'fintual.cl','BTG Pactual':'btgpactual.cl','Racional':'racional.cl',
+  'Itaú':'itau.cl','Itaú PJ':'itau.cl','Santander':'santander.com',
+  'Scotiabank':'scotiabank.com','Banco de Chile':'bancochile.cl',
+  'Banco Ripley':'bancoripley.cl','Consorcio':'consorcio.cl',
+  'Líder BCI':'lider.cl','AFP Modelo':'afpmodelo.cl','AFC':'afc.cl',
+  'Fraccional':'fraccional.cl','Neat':'neat.cl','Global66':'global66.com',
+  'Harvard FCU':'harvardfcu.org','Charles Schwabb':'schwab.com',
+  'Wealthfront':'wealthfront.com','Dorco':'dorco.cl','WBuild':'wbuild.cl',
+};
+const INST_COLOR={
+  'Fintual':'#FF5F00','BTG Pactual':'#003DA5','Racional':'#2563EB',
+  'Itaú':'#EC7000','Itaú PJ':'#EC7000','Santander':'#EC0000',
+  'Scotiabank':'#C8102E','Banco de Chile':'#003DA5','Banco Ripley':'#CF0A2C',
+  'Consorcio':'#004B8D','Líder BCI':'#005B99','AFP Modelo':'#0055A5',
+  'AFC':'#005B99','Fraccional':'#6C63FF','Neat':'#00C27C',
+  'Global66':'#6B21A8','Harvard FCU':'#8B1A1A','Charles Schwabb':'#00A0DC',
+  'Wealthfront':'#00BFA5','Dorco':'#374151','WBuild':'#065F46',
+};
+function instLogoDesktop(inst){
+  const domain=INST_DOMAIN[inst];
+  const color=INST_COLOR[inst]||'#5B6BF5';
+  const init=(inst||'?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+  if(!domain) return `<div class="dic-av" style="background:${color}">${init}</div>`;
+  return `<div class="dic-logo"><img src="https://logo.clearbit.com/${domain}" alt="" onerror="this.parentElement.outerHTML='<div class=\\"dic-av\\" style=\\"background:${color}\\">${init}</div>'"></div>`;
+}
+function instLogoMobile(inst){
+  const domain=INST_DOMAIN[inst];
+  const color=INST_COLOR[inst]||'#5B6BF5';
+  const init=(inst||'?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+  if(!domain) return `<div class="mob-item-av" style="background:${color}">${init}</div>`;
+  return `<div class="mob-item-logo"><img src="https://logo.clearbit.com/${domain}" alt="" onerror="this.parentElement.outerHTML='<div class=\\"mob-item-av\\" style=\\"background:${color}\\">${init}</div>'"></div>`;
 }
 
 // ─────────────────────────────────────────
@@ -2021,6 +2068,7 @@ function renderSummaryMob(){
       const ineg=it.clp<0;
       const {val:itemVal, lbl:iLbl}=fmt(it.clp, it.monto, it.moneda);
       h+=`<div class="mob-item">
+        ${instLogoMobile(it.institucion)}
         <div class="mob-item-info">
           <div class="mob-item-top">
             <span class="mob-item-inst">${it.institucion||'—'}</span>
