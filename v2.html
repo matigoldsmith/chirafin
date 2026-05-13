@@ -953,14 +953,14 @@ function instLogoDesktop(inst){
   const color=INST_COLOR[inst]||'#5B6BF5';
   const init=(inst||'?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
   if(!domain) return `<div class="dic-av" style="background:${color}">${init}</div>`;
-  return `<div class="dic-logo"><img src="https://logo.clearbit.com/${domain}" alt="" onerror="this.parentElement.outerHTML='<div class=\\"dic-av\\" style=\\"background:${color}\\">${init}</div>'"></div>`;
+  return `<div class="dic-logo"><img src="https://logo.clearbit.com/${domain}" alt="" onerror="var p=this.parentElement;p.className='dic-av';p.style.background='${color}';p.innerHTML='${init}'"  style="width:20px;height:20px;object-fit:contain"></div>`;
 }
 function instLogoMobile(inst){
   const domain=INST_DOMAIN[inst];
   const color=INST_COLOR[inst]||'#5B6BF5';
   const init=(inst||'?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
   if(!domain) return `<div class="mob-item-av" style="background:${color}">${init}</div>`;
-  return `<div class="mob-item-logo"><img src="https://logo.clearbit.com/${domain}" alt="" onerror="this.parentElement.outerHTML='<div class=\\"mob-item-av\\" style=\\"background:${color}\\">${init}</div>'"></div>`;
+  return `<div class="mob-item-logo"><img src="https://logo.clearbit.com/${domain}" alt="" onerror="var p=this.parentElement;p.className='mob-item-av';p.style.background='${color}';p.innerHTML='${init}'" style="width:22px;height:22px;object-fit:contain"></div>`;
 }
 
 // ─────────────────────────────────────────
