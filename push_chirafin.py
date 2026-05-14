@@ -1,70 +1,53 @@
 #!/usr/bin/env python3
-"""Push chirafin_v2.html to GitHub Pages (matigoldsmith/chirafin)"""
-import base64, json, subprocess, os, urllib.request
+"""Commit + push de saldos.py y CLAUDE.md al repo chirafin en GitHub."""
+import subprocess, os, datetime, sys
 
-TOKEN_FILE = os.path.expanduser('/Users/mgoldsmithd/Scripts Claude AI/.github_token')
-
-def bw_env():
-    env = os.environ.copy()
-    env["NODE_TLS_REJECT_UNAUTHORIZED"] = "0"
-    return env
-
-def bw_unlock():
-    master = subprocess.run(["security","find-generic-password","-a","bitwarden","-s","bitwarden-master","-w"],capture_output=True,text=True).stdout.strip()
-    result = subprocess.run(["bw","unlock",master,"--raw"],capture_output=True,text=True,env=bw_env())
-    session = result.stdout.strip()
-    if session: os.environ["BW_SESSION"] = session
-    else: raise Exception("No se pudo desbloquear Bitwarden")
-
-def bw_get(field, item_name):
-    env = bw_env()
-    result = subprocess.run(["bw","get",field,item_name],capture_output=True,text=True,env=env)
-    if "Session key is invalid" in result.stderr or not result.stdout.strip():
-        bw_unlock()
-        result = subprocess.run(["bw","get",field,item_name],capture_output=True,text=True,env=bw_env())
-    return result.stdout.strip()
+BASE    = '/Users/mgoldsmithd/Scripts Claude AI'
+TOKEN_F = os.path.join(BASE, '.github_token')
+REPO    = 'matigoldsmith/chirafin'
 
 def get_token():
-    # 1. Try saved token file
-    if os.path.exists(TOKEN_FILE):
-        t = open(TOKEN_FILE).read().strip()
+    if os.path.exists(TOKEN_F):
+        t = open(TOKEN_F).read().strip()
         if t: return t
-    # 2. Try Bitwarden
-    for name in ["github.com", "GitHub", "github"]:
-        try:
-            t = bw_get("password", name)
-            if t: break
-        except: t = None
-    # 3. Manual input
-    if not t:
-        t = input("GitHub Personal Access Token: ").strip()
-    # Save for future sessions
+    t = input("GitHub Personal Access Token: ").strip()
     if t:
-        with open(TOKEN_FILE, 'w') as f: f.write(t)
-        os.chmod(TOKEN_FILE, 0o600)
-        print(f"Token guardado en {TOKEN_FILE}")
+        with open(TOKEN_F, 'w') as f: f.write(t)
+        os.chmod(TOKEN_F, 0o600)
     return t
 
-def gh_push(token, path_local, path_remote, message):
-    with open(path_local, 'rb') as f:
-        content_b64 = base64.b64encode(f.read()).decode()
-    headers = {'Authorization': f'token {token}', 'Accept': 'application/vnd.github.v3+json', 'Content-Type': 'application/json'}
-    url = f'https://api.github.com/repos/matigoldsmith/chirafin/contents/{path_remote}'
-    try:
-        req = urllib.request.Request(url, headers=headers)
-        resp = json.loads(urllib.request.urlopen(req).read())
-        sha = resp['sha']
-    except: sha = None
-    data = {'message': message, 'content': content_b64}
-    if sha: data['sha'] = sha
-    req2 = urllib.request.Request(url, data=json.dumps(data).encode(), method='PUT', headers=headers)
-    resp2 = json.loads(urllib.request.urlopen(req2).read())
-    print(f"  ✓ {path_remote} → {resp2['commit']['sha'][:8]}")
+def run(cmd, **kw):
+    return subprocess.run(cmd, cwd=BASE, capture_output=True, text=True, **kw)
 
-BASE = '/Users/mgoldsmithd/Scripts Claude AI'
 token = get_token()
-if not token: raise SystemExit("Sin token")
-msg = "chirafin: TdC combined view with summary + pending first"
-gh_push(token, f'{BASE}/chirafin_v2.html', 'index.html', msg)
-gh_push(token, f'{BASE}/chirafin_v2.html', 'v2.html', msg)
-print("¡Listo! https://matigoldsmith.github.io/chirafin/")
+if not token:
+    print("Sin token. Abortando."); sys.exit(1)
+
+# Configurar remote con token
+remote_url = f'https://{token}@github.com/{REPO}.git'
+run(['git', 'remote', 'set-url', 'origin', remote_url])
+
+# Stage cambios relevantes
+run(['git', 'add', 'saldos.py', 'CLAUDE.md', '.gitignore'])
+
+# Verificar si hay algo que commitear
+status = run(['git', 'status', '--porcelain'])
+if status.stdout.strip():
+    date_str = datetime.datetime.now().strftime('%d %b %H:%M')
+    msg = f"chirafin: backup {date_str}"
+    result = run(['git', 'commit', '-m', msg])
+    if result.returncode != 0:
+        print(f"Error al commitear:\n{result.stderr}")
+        sys.exit(1)
+    print(f"  Commit: {msg}")
+else:
+    print("  Sin cambios nuevos — solo push.")
+
+# Push
+print("  Pushing...")
+result = run(['git', 'push', 'origin', 'master'], timeout=60)
+if result.returncode == 0:
+    print("✓ Push exitoso → https://github.com/matigoldsmith/chirafin")
+else:
+    print(f"✗ Push falló:\n{result.stderr}")
+    sys.exit(1)

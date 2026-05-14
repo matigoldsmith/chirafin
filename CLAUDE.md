@@ -45,15 +45,32 @@ Al mostrar cualquier resumen o visualización de patrimonio, SIEMPRE usar las ca
 
 ## STATUS ACTUAL (14 May 2026) ✅ FUNCIONANDO
 
-**Cambios críticos 14 May 2026 — scraper_config Supabase-first + SCO-PAGOS fixes + menu homologation:**
+**Cambios críticos 14 May 2026 — sesión tarde:**
 
-1. **`scraper_config` tabla en Supabase:** `_seed_scraper_config()` y `_reload_inactive_keys()` leen primero Supabase, SQLite como fallback.
-2. **`manage_scrapers()` unificado:** 3 modos — "Configurar todos los automáticos" / "Configurar solo de inversiones" / "Configurar solo bancarios". UI idéntica (misma función `_render_table()` + `_save_changes()`). 🔴 OFF mostrado en rojo.
-3. **`in_bancarios` columna en `scraper_config`:** Supabase + SQLite con migration automática en `init_db()`.
-4. **CxC/CxP ocultas cuando cero:** `_NOTE_REQUIRED_ITEMS = {"Cuentas por cobrar", "Cuentas por pagar"}` — siempre se saltan en `show_last_saldos()` cuando monto=0.
-5. **SCO-PAGOS `_extract_pago_rows()` fix:** `isPagoKeyword` ahora incluye `\\bpago\\b` (word boundary). "PAGO EN EFECTIVO", "PAGO" → ✅. `otrospagos.com` excluido explícitamente (es compra, no pago, a menos que monto sea negativo).
-6. **Debug SCO-PAGOS mejorado:** Imprime TODOS los movimientos no-facturados con `✅ PAGO` / `❌  no ` por fila + total sumado. (Ya no solo primeras 8.)
-7. **Menú homologación completa:** Todos los `questionary.select/checkbox` usan "« Volver", `qmark=""`, `patch_stdout=True`, estilo QUESTIONARY_STYLE. Backup: `backups/saldos_20260514_supabase_cfg_sco_fix_homolog.py`.
+1. **Fix CxC/CxP `item_code` en `_LAST_TABLE_MAPPING`:** Al editar una fila CxC/CxP desde la tabla, el item guardado en `_LAST_TABLE_MAPPING['item']` era el display (la nota, ej: "Devolución Fraccional") en lugar del `item_code` real del catálogo ("Cuentas por cobrar"). Fix: se agrega `item_code` como `extra[2]` en la tupla de `rows.append()` y `_print_table_rows` lo usa para `_LAST_TABLE_MAPPING`. Backup: `backups/saldos_20260514_cxc_item_code_fix.py`.
+
+2. **Menú ACTUALIZAR DATOS reestructurado — 3 opciones:**
+   - "Actualizar todos los automáticos" → `run_scraping(all, full_update=True)`
+   - "Actualizar algunos automáticos" → `_actualizar_algunos_automaticos()` (inversiones / bancarios / institución específica)
+   - "Actualizar algún registro particular" → `prompt_manual_items()` directo
+   - El submenú tiene `while True` propio: vuelve al mismo submenú tras cada acción (no al menú principal)
+   - Backup: `backups/saldos_20260514_menu_actualizar_3opciones.py`
+
+3. **SCO-PAGOS debug desactivado:** El listado detallado de movimientos (✅/❌ por fila) queda detrás de `DEBUG=True`. En producción solo muestra 1 línea de resumen por tarjeta: `fac=... | pag_clp=... | pagar_hasta=...`
+
+4. **GitHub backup automático:**
+   - Repo: `https://github.com/matigoldsmith/chirafin`
+   - Script: `push_chirafin.py` — hace commit de `saldos.py` + `CLAUDE.md` + push usando `.github_token`
+   - Doble click: `push.command`
+
+**Cambios críticos 14 May 2026 — sesión mañana:**
+
+5. **`scraper_config` tabla en Supabase:** `_seed_scraper_config()` y `_reload_inactive_keys()` leen primero Supabase, SQLite como fallback.
+6. **`manage_scrapers()` unificado:** 3 modos — "Configurar todos los automáticos" / "Configurar solo de inversiones" / "Configurar solo bancarios". UI idéntica (misma función `_render_table()` + `_save_changes()`). 🔴 OFF mostrado en rojo.
+7. **`in_bancarios` columna en `scraper_config`:** Supabase + SQLite con migration automática en `init_db()`.
+8. **CxC/CxP ocultas cuando cero:** `_NOTE_REQUIRED_ITEMS = {"Cuentas por cobrar", "Cuentas por pagar"}` — siempre se saltan en `show_last_saldos()` cuando monto=0.
+9. **SCO-PAGOS `_extract_pago_rows()` fix:** `isPagoKeyword` ahora incluye `\\bpago\\b` (word boundary). `otrospagos.com` excluido explícitamente. `seenAll` Set deduplica filas repetidas del DOM. Comparación por `tuple(row)` en lugar de `id(row)`. Backup: `backups/saldos_20260514_sco_pagos_dedup_fix.py`.
+10. **Menú homologación completa:** Todos los `questionary.select/checkbox` usan "« Volver", `qmark=""`, `patch_stdout=True`, estilo QUESTIONARY_STYLE. Backup: `backups/saldos_20260514_supabase_cfg_sco_fix_homolog.py`.
 
 ---
 
