@@ -11231,34 +11231,31 @@ def show_tdc():
     pendientes.sort(key=lambda x: x[0])
     al_dia.sort(key=lambda x: x[0])
 
-    # ── 5. Tabla única con separadores de sección ─────────────────────────────
-    table = Table(
-        title="\n[bold sky_blue3]TARJETAS DE CRÉDITO[/bold sky_blue3]",
-        box=rbox.ROUNDED, header_style="bold sky_blue3", border_style="dim",
-        title_justify="center", show_header=True,
-        row_styles=["", "on grey15"],
-    )
-    table.add_column("Banco",       style="bold white", no_wrap=True,  min_width=12)
-    table.add_column("Tarjeta",     style="white",      no_wrap=True,  min_width=20)
-    table.add_column("Deuda CLP",   justify="right",    min_width=13)
-    table.add_column("Cupo CLP",    justify="right",    min_width=13)
-    table.add_column("Disp. CLP",   justify="right",    min_width=13)
-    table.add_column("%",           justify="right",    min_width=5)
-    if has_usd:
-        table.add_column("Cupo USD",  justify="right",  min_width=10)
-    table.add_column("Facturado",   justify="right",    min_width=13)
-    if has_usd:
-        table.add_column("Fac. USD",  justify="right",  min_width=10)
-    table.add_column("Δ Pagar",     justify="right",    min_width=13)
-    if has_usd:
-        table.add_column("Δ USD",     justify="right",  min_width=10)
-    table.add_column("Pagar hasta", justify="center",   min_width=11)
-    table.add_column("Act.",        justify="center",   min_width=13, style="dim")
-
-    n_cols = 9 + (3 if has_usd else 0)
-
-    def _section_row(label):
-        return (Text(f"  {label}", style="bold dim white"),) + ("",) * (n_cols - 1)
+    # ── 5. Dos tablas separadas: PENDIENTES / AL DÍA ─────────────────────────
+    def _make_tdc_table(title):
+        t = Table(
+            title=title,
+            box=rbox.ROUNDED, header_style="bold sky_blue3", border_style="dim",
+            title_justify="center", show_header=True,
+            row_styles=["", "on grey15"],
+        )
+        t.add_column("Banco",       style="bold white", no_wrap=True,  width=16)
+        t.add_column("Tarjeta",     style="white",      no_wrap=True,  width=22)
+        t.add_column("Deuda CLP",   justify="right",    no_wrap=True,  width=14)
+        t.add_column("Cupo CLP",    justify="right",    no_wrap=True,  width=14)
+        t.add_column("Disp. CLP",   justify="right",    no_wrap=True,  width=14)
+        t.add_column("%",           justify="right",    no_wrap=True,  width=6)
+        if has_usd:
+            t.add_column("Cupo USD",  justify="right",  no_wrap=True,  width=11)
+        t.add_column("Facturado",   justify="right",    no_wrap=True,  width=14)
+        if has_usd:
+            t.add_column("Fac. USD",  justify="right",  no_wrap=True,  width=11)
+        t.add_column("Δ Pagar",     justify="right",    no_wrap=True,  width=14)
+        if has_usd:
+            t.add_column("Δ USD",     justify="right",  no_wrap=True,  width=11)
+        t.add_column("Pagar hasta", justify="center",   no_wrap=True,  width=12)
+        t.add_column("Act.",        justify="center",   no_wrap=True,  width=13, style="dim")
+        return t
 
     def _data_row(entry):
         _, banco, tarjeta, deuda, cupo_clp, cupo_usd, disp, pct, fac_clp, delta_clp, fac_usd, delta_usd, pagar, ts = entry
@@ -11283,16 +11280,22 @@ def show_tdc():
         return cells
 
     _console.print()
+    _console.print(Rule("[bold sky_blue3]TARJETAS DE CRÉDITO[/bold sky_blue3]", style="sky_blue3"))
+    _console.print()
     if pendientes:
-        table.add_row(*_section_row("PENDIENTES"), end_section=True)
+        t = _make_tdc_table("[bold white]PENDIENTES[/bold white]")
         for entry in pendientes:
-            table.add_row(*_data_row(entry))
+            t.add_row(*_data_row(entry))
+        _console.print(t)
+        _console.print()
     if al_dia:
-        table.add_row(*_section_row("AL DÍA"), end_section=True)
+        t = _make_tdc_table("[bold white]AL DÍA[/bold white]")
         for entry in al_dia:
-            table.add_row(*_data_row(entry))
+            t.add_row(*_data_row(entry))
+        _console.print(t)
+    if not pendientes and not al_dia:
+        _console.print("[dim]Sin tarjetas registradas.[/dim]")
 
-    _console.print(table)
     input("\nPresiona Enter para volver al menú...")
 
 
