@@ -2150,7 +2150,7 @@ def init_db():
             pagado_usd    REAL
         )
     """)
-    # Migraciones
+    # Migraciones pagos_tdc
     try:
         conn.execute("ALTER TABLE pagos_tdc DROP COLUMN periodo_desde")
         conn.commit()
@@ -2158,6 +2158,12 @@ def init_db():
         pass
     try:
         conn.execute("ALTER TABLE pagos_tdc ADD COLUMN no_facturado_clp REAL")
+        conn.commit()
+    except Exception:
+        pass
+    # Migración credit_limits: agregar cupo_usd si no existe
+    try:
+        conn.execute("ALTER TABLE credit_limits ADD COLUMN cupo_usd REAL NOT NULL DEFAULT 0")
         conn.commit()
     except Exception:
         pass
@@ -11011,6 +11017,95 @@ def show_pagos_tdc():
     input("\nPresiona Enter para volver al menú...")
 
 
+def manage_cupos_tdc():
+    """Editor de cupos CLP y USD por tarjeta — accesible desde Configuración."""
+    from rich.table import Table
+    from rich import box as rbox
+
+    all_catalog = _get_unified_catalog_list()
+    tdc_items = [
+        (_CATALOG_TO_DB_INST.get(m['inst'], m['inst']), m['inst'], m['item'])
+        for m in all_catalog if m['cat'] == 'TdC'
+    ]
+    if not tdc_items:
+        _console.print("[yellow]No hay tarjetas en el catálogo.[/yellow]")
+        return
+
+    conn = init_db()
+    conn.execute("""CREATE TABLE IF NOT EXISTS credit_limits (
+        institucion TEXT NOT NULL, item TEXT NOT NULL, cupo REAL NOT NULL,
+        cupo_usd REAL NOT NULL DEFAULT 0, PRIMARY KEY (institucion, item))""")
+    conn.commit()
+    cupos_db = {(i, it): (c, u) for i, it, c, u in
+                conn.execute("SELECT institucion, item, cupo, COALESCE(cupo_usd,0) FROM credit_limits").fetchall()}
+
+    while True:
+        # Mostrar tabla actual
+        table = Table(
+            title="\n[bold sky_blue3]CUPOS DE TARJETAS[/bold sky_blue3]",
+            box=rbox.ROUNDED, header_style="bold sky_blue3", border_style="dim",
+            title_justify="center", show_header=True,
+            row_styles=["", "on grey15"],
+        )
+        table.add_column("#",          justify="right",  width=4,  style="dim")
+        table.add_column("Banco",      style="bold white", no_wrap=True)
+        table.add_column("Tarjeta",    style="white",      no_wrap=True)
+        table.add_column("Cupo CLP",   justify="right",  min_width=14)
+        table.add_column("Cupo USD",   justify="right",  min_width=10)
+
+        sorted_items = sorted(tdc_items, key=lambda x: x[1])
+        for idx, (db_inst, disp_inst, item) in enumerate(sorted_items, 1):
+            clp, usd = cupos_db.get((db_inst, item), (0, 0))
+            clp_str = f"{int(round(clp)):,}".replace(",", ".") if clp else "—"
+            usd_str = f"{usd:,.0f}" if usd else "—"
+            table.add_row(str(idx), disp_inst, item, clp_str, usd_str)
+
+        _console.print()
+        _console.print(table)
+        _console.print()
+
+        ans = questionary.text(
+            "  Número a editar (o Enter para volver):",
+            qmark=""
+        ).ask(patch_stdout=True)
+
+        if not ans or not ans.strip():
+            break
+        try:
+            idx = int(ans.strip()) - 1
+            if not (0 <= idx < len(sorted_items)):
+                _console.print("[red]Número fuera de rango.[/red]"); continue
+        except ValueError:
+            _console.print("[red]Ingresa un número.[/red]"); continue
+
+        db_inst, disp_inst, item = sorted_items[idx]
+        clp_actual, usd_actual = cupos_db.get((db_inst, item), (0, 0))
+
+        clp_str = questionary.text(
+            f"  Cupo CLP para {disp_inst} {item} (actual: {int(round(clp_actual)):,}):".replace(",", "."),
+            qmark=""
+        ).ask(patch_stdout=True)
+        usd_str = questionary.text(
+            f"  Cupo USD para {disp_inst} {item} (actual: {usd_actual:,.0f}, 0 si no aplica):",
+            qmark=""
+        ).ask(patch_stdout=True)
+
+        try: new_clp = abs(int(clp_str.replace(".", "").replace(",", "").replace("$", "").strip())) if clp_str and clp_str.strip() else clp_actual
+        except Exception: new_clp = clp_actual
+        try: new_usd = abs(float(usd_str.replace(",", "").strip())) if usd_str and usd_str.strip() else usd_actual
+        except Exception: new_usd = usd_actual
+
+        conn.execute(
+            "INSERT OR REPLACE INTO credit_limits (institucion, item, cupo, cupo_usd) VALUES (?,?,?,?)",
+            (db_inst, item, new_clp, new_usd)
+        )
+        conn.commit()
+        cupos_db[(db_inst, item)] = (new_clp, new_usd)
+        _console.print(f"[bold green]  ✓ Guardado: CLP {int(new_clp):,} | USD {new_usd:,.0f}[/bold green]".replace(",", "."))
+
+    conn.close()
+
+
 def show_tdc():
     """Vista combinada: cupos + pagos de todas las TdC en una sola tabla."""
     from rich.table import Table
@@ -11022,6 +11117,10 @@ def show_tdc():
     def _fmt_clp(n):
         if n is None or n == 0: return "—"
         return f"{int(round(n)):,}".replace(",", ".")
+
+    def _fmt_usd(n):
+        if n is None or n == 0: return "—"
+        return f"{n:,.2f}"
 
     def _fmt_date(s):
         if not s: return "—"
@@ -11044,19 +11143,17 @@ def show_tdc():
     tdc_items = [
         (_CATALOG_TO_DB_INST.get(m['inst'], m['inst']), m['inst'], m['item'])
         for m in all_catalog if m['cat'] == 'TdC'
-    ]  # (db_inst, disp_inst, item)
-
+    ]
     if not tdc_items:
         _console.print("[yellow]No hay tarjetas en el catálogo.[/yellow]")
         return
 
-    # ── 2. Deudas actuales (de saldos) ───────────────────────────────────────
+    # ── 2. Deudas + cupos ─────────────────────────────────────────────────────
     conn = init_db()
     conn.execute("""CREATE TABLE IF NOT EXISTS credit_limits (
         institucion TEXT NOT NULL, item TEXT NOT NULL, cupo REAL NOT NULL,
         PRIMARY KEY (institucion, item))""")
     conn.commit()
-
     rows_db = conn.execute("""
         SELECT s.institucion, s.item, s.monto, s.timestamp
         FROM saldos s
@@ -11069,64 +11166,64 @@ def show_tdc():
     """).fetchall()
     deudas = {(i, it): abs(float(m)) for i, it, m, _ in rows_db if m is not None}
     ts_map  = {(i, it): ts for i, it, _, ts in rows_db}
-
-    # ── 3. Cupos guardados ────────────────────────────────────────────────────
-    cupos_db = {(i, it): c for i, it, c in
-                conn.execute("SELECT institucion, item, cupo FROM credit_limits").fetchall()}
-
-    # Pedir cupos faltantes
+    cupos_db = {(i, it): (c, u) for i, it, c, u in
+                conn.execute("SELECT institucion, item, cupo, COALESCE(cupo_usd,0) FROM credit_limits").fetchall()}
     missing = [(db_i, d_i, it) for db_i, d_i, it in tdc_items if (db_i, it) not in cupos_db]
     if missing:
-        _console.print("\n[bold yellow]Cupos no configurados — ingresa el límite de cada tarjeta:[/bold yellow]")
+        _console.print("\n[bold yellow]Cupos no configurados — ingresa el límite CLP de cada tarjeta:[/bold yellow]")
+        _console.print("[dim]  (Para configurar cupo USD también, ir a Configuración → Cupos TdC)[/dim]")
         for db_i, d_i, it in missing:
-            val_str = questionary.text(f"  Cupo {d_i} {it} (CLP, ej: 5.000.000):", style=QUESTIONARY_STYLE).ask()
+            val_str = questionary.text(f"  Cupo CLP {d_i} {it} (ej: 5.000.000):", style=QUESTIONARY_STYLE).ask()
             if val_str is None: conn.close(); return
             try: cupo = abs(int(val_str.replace(".", "").replace(",", "").replace("$", "").strip()))
             except Exception: cupo = 0
-            conn.execute("INSERT OR REPLACE INTO credit_limits VALUES (?,?,?)", (db_i, it, cupo))
+            conn.execute("INSERT OR REPLACE INTO credit_limits (institucion, item, cupo, cupo_usd) VALUES (?,?,?,0)",
+                         (db_i, it, cupo))
             conn.commit()
-            cupos_db[(db_i, it)] = cupo
+            cupos_db[(db_i, it)] = (cupo, 0)
     conn.close()
 
-    # ── 4. Datos de pagos (pagos_tdc en Supabase) ─────────────────────────────
+    # ── 3. Pagos (Supabase) ───────────────────────────────────────────────────
     _migrate_pagos_tdc_to_supabase()
     pagos_raw = _read_supabase(
         "pagos_tdc",
-        select="institucion,card_number,card_name,periodo_hasta,pagar_hasta,facturado_clp,pagado_clp,no_facturado_clp,timestamp",
+        select="institucion,card_number,card_name,periodo_hasta,pagar_hasta,"
+               "facturado_clp,pagado_clp,no_facturado_clp,facturado_usd,pagado_usd,timestamp",
         extra="&order=timestamp.desc"
     )
-    # Más reciente por (institucion, card_number)
     pagos_map = {}
     for rec in pagos_raw:
         k = (rec.get("institucion"), str(rec.get("card_number", "")))
         if k not in pagos_map:
             pagos_map[k] = rec
 
-    # ── 5. Construir filas combinadas ─────────────────────────────────────────
+    # ── 4. Construir filas ────────────────────────────────────────────────────
     pendientes, al_dia = [], []
+    has_usd = False
     for db_inst, disp_inst, item in sorted(tdc_items, key=lambda x: x[1]):
-        deuda = deudas.get((db_inst, item), 0.0)
-        cupo  = cupos_db.get((db_inst, item), 0.0)
-        disp  = cupo - deuda
-        pct   = int(round(disp / cupo * 100)) if cupo > 0 else 0
-        ts    = ts_map.get((db_inst, item))
-
-        # Buscar pagos por los últimos 4 dígitos del item ("TdC 3134" → "3134")
+        deuda    = deudas.get((db_inst, item), 0.0)
+        cupo_clp, cupo_usd = cupos_db.get((db_inst, item), (0.0, 0.0))
+        disp     = cupo_clp - deuda
+        pct      = int(round(disp / cupo_clp * 100)) if cupo_clp > 0 else 0
+        ts       = ts_map.get((db_inst, item))
         card_digits = item.split()[-1] if item else ""
         pago = pagos_map.get((db_inst, card_digits)) or pagos_map.get((disp_inst, card_digits))
         if pago:
             fac_clp   = pago.get("facturado_clp") or 0
             paid_clp  = pago.get("pagado_clp") if pago.get("pagado_clp") is not None else (pago.get("no_facturado_clp") or 0)
+            fac_usd   = pago.get("facturado_usd") or 0
+            paid_usd  = pago.get("pagado_usd") or 0
             delta_clp = fac_clp - paid_clp
+            delta_usd = fac_usd - paid_usd
             pagar     = pago.get("pagar_hasta")
-            periodo   = pago.get("periodo_hasta")
         else:
-            fac_clp = paid_clp = delta_clp = 0
-            pagar = periodo = None
-
+            fac_clp = paid_clp = fac_usd = paid_usd = delta_clp = delta_usd = 0
+            pagar = None
+        if fac_usd or delta_usd or cupo_usd: has_usd = True
         sort_key = _parse_pagar(pagar)
-        entry = (sort_key, disp_inst, item, deuda, cupo, disp, pct, fac_clp, delta_clp, pagar, ts)
-        if delta_clp > 0:
+        entry = (sort_key, disp_inst, item, deuda, cupo_clp, cupo_usd, disp, pct,
+                 fac_clp, delta_clp, fac_usd, delta_usd, pagar, ts)
+        if delta_clp > 0 or delta_usd > 0:
             pendientes.append(entry)
         else:
             al_dia.append(entry)
@@ -11134,56 +11231,68 @@ def show_tdc():
     pendientes.sort(key=lambda x: x[0])
     al_dia.sort(key=lambda x: x[0])
 
-    # ── 6. Renderizar ─────────────────────────────────────────────────────────
-    def _make_table(title_markup):
-        t = Table(
-            title=title_markup,
-            box=rbox.ROUNDED, header_style="bold sky_blue3", border_style="dim",
-            title_justify="center", show_header=True,
-            row_styles=["", "on grey15"],
-        )
-        t.add_column("Banco",       style="bold white", no_wrap=True)
-        t.add_column("Tarjeta",     style="white",      no_wrap=True, min_width=18)
-        t.add_column("Deuda",       justify="right",    width=14)
-        t.add_column("Cupo",        justify="right",    width=14)
-        t.add_column("Disponible",  justify="right",    width=14)
-        t.add_column("%",           justify="right",    width=6)
-        t.add_column("Facturado",   justify="right",    width=14)
-        t.add_column("Δ Pagar",     justify="right",    width=14)
-        t.add_column("Pagar hasta", justify="center",   width=12)
-        t.add_column("Act.",        justify="center",   width=14, style="dim")
-        return t
+    # ── 5. Tabla única con separadores de sección ─────────────────────────────
+    table = Table(
+        title="\n[bold sky_blue3]TARJETAS DE CRÉDITO[/bold sky_blue3]",
+        box=rbox.ROUNDED, header_style="bold sky_blue3", border_style="dim",
+        title_justify="center", show_header=True,
+        row_styles=["", "on grey15"],
+    )
+    table.add_column("Banco",       style="bold white", no_wrap=True,  min_width=12)
+    table.add_column("Tarjeta",     style="white",      no_wrap=True,  min_width=20)
+    table.add_column("Deuda CLP",   justify="right",    min_width=13)
+    table.add_column("Cupo CLP",    justify="right",    min_width=13)
+    table.add_column("Disp. CLP",   justify="right",    min_width=13)
+    table.add_column("%",           justify="right",    min_width=5)
+    if has_usd:
+        table.add_column("Cupo USD",  justify="right",  min_width=10)
+    table.add_column("Facturado",   justify="right",    min_width=13)
+    if has_usd:
+        table.add_column("Fac. USD",  justify="right",  min_width=10)
+    table.add_column("Δ Pagar",     justify="right",    min_width=13)
+    if has_usd:
+        table.add_column("Δ USD",     justify="right",  min_width=10)
+    table.add_column("Pagar hasta", justify="center",   min_width=11)
+    table.add_column("Act.",        justify="center",   min_width=13, style="dim")
 
-    def _add_rows(table, entries):
-        for _, banco, tarjeta, deuda, cupo, disp, pct, fac_clp, delta_clp, pagar, ts in entries:
-            disp_col = "bright_green" if disp > 0 else ("bright_red" if disp < 0 else "white")
-            pct_col  = disp_col
-            d_col    = "bright_red" if delta_clp > 0 else "bright_green"
-            ts_fmt   = _fmt_ts(ts) if ts else "—"
-            table.add_row(
-                banco,
-                tarjeta,
-                Text(_fmt_clp(deuda),    style="bright_red" if deuda > 0 else "dim"),
-                Text(_fmt_clp(cupo),     style="white"),
-                Text(_fmt_clp(disp),     style=disp_col),
-                Text(f"{pct}%",          style=pct_col),
-                _fmt_clp(fac_clp) if fac_clp else "—",
-                Text(_fmt_clp(abs(delta_clp)) if delta_clp else "—", style=d_col if delta_clp else "dim"),
-                _fmt_date(pagar),
-                ts_fmt,
-            )
+    n_cols = 9 + (3 if has_usd else 0)
+
+    def _section_row(label):
+        return (Text(f"  {label}", style="bold dim white"),) + ("",) * (n_cols - 1)
+
+    def _data_row(entry):
+        _, banco, tarjeta, deuda, cupo_clp, cupo_usd, disp, pct, fac_clp, delta_clp, fac_usd, delta_usd, pagar, ts = entry
+        dc    = "bright_green" if disp > 0 else ("bright_red" if disp < 0 else "white")
+        clp_c = "bright_red" if delta_clp > 0 else ("bright_green" if delta_clp < 0 else "dim")
+        usd_c = "bright_red" if delta_usd > 0 else ("bright_green" if delta_usd < 0 else "dim")
+        ts_fmt = _fmt_ts(ts) if ts else "—"
+        cells = [
+            banco,
+            tarjeta,
+            Text(_fmt_clp(deuda),    style="bright_red" if deuda > 0 else "dim"),
+            Text(_fmt_clp(cupo_clp), style="white"),
+            Text(_fmt_clp(disp),     style=dc),
+            Text(f"{pct}%",          style=dc),
+        ]
+        if has_usd: cells.append(_fmt_usd(cupo_usd) if cupo_usd else "—")
+        cells.append(_fmt_clp(fac_clp) if fac_clp else "—")
+        if has_usd: cells.append(_fmt_usd(fac_usd) if fac_usd else "—")
+        cells.append(Text(_fmt_clp(abs(delta_clp)) if delta_clp else "—", style=clp_c))
+        if has_usd: cells.append(Text(_fmt_usd(abs(delta_usd)) if delta_usd else "—", style=usd_c))
+        cells += [_fmt_date(pagar), ts_fmt]
+        return cells
 
     _console.print()
     if pendientes:
-        t = _make_table("[bold white]PENDIENTES[/bold white]")
-        _add_rows(t, pendientes)
-        _console.print(t)
-        _console.print()
+        table.add_row(*_section_row("PENDIENTES"), end_section=True)
+        for entry in pendientes:
+            table.add_row(*_data_row(entry))
     if al_dia:
-        t = _make_table("[bold white]AL DÍA[/bold white]")
-        _add_rows(t, al_dia)
-        _console.print(t)
+        table.add_row(*_section_row("AL DÍA"), end_section=True)
+        for entry in al_dia:
+            table.add_row(*_data_row(entry))
 
+    _console.print(table)
     input("\nPresiona Enter para volver al menú...")
 
 
@@ -11628,12 +11737,16 @@ def main():
         elif top_sel == "config":
             sub = _print_table_menu("CONFIGURACIÓN", [
                 "  Gestión de scrapers",
+                "  Cupos de Tarjetas de Crédito",
                 "  Sincronizar Bitwarden",
                 "  « Volver",
             ])
             if sub == 1:
                 manage_scrapers()
             elif sub == 2:
+                _clear_content()
+                manage_cupos_tdc()
+            elif sub == 3:
                 _clear_content()
                 _console.print("\n[dim]Sincronizando Bitwarden...[/dim]")
                 result = subprocess.run(["bw", "sync"], capture_output=True, text=True, env=bw_env())
