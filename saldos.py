@@ -11011,6 +11011,182 @@ def show_pagos_tdc():
     input("\nPresiona Enter para volver al menú...")
 
 
+def show_tdc():
+    """Vista combinada: cupos + pagos de todas las TdC en una sola tabla."""
+    from rich.table import Table
+    from rich.text import Text
+    from rich import box as rbox
+
+    MESES = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"]
+
+    def _fmt_clp(n):
+        if n is None or n == 0: return "—"
+        return f"{int(round(n)):,}".replace(",", ".")
+
+    def _fmt_date(s):
+        if not s: return "—"
+        for fmt in ("%d/%m/%Y", "%Y-%m-%d"):
+            try:
+                dt = datetime.datetime.strptime(s[:10], fmt)
+                return f"{dt.day:02d}-{MESES[dt.month-1]}"
+            except ValueError: continue
+        return s[:10]
+
+    def _parse_pagar(s):
+        if not s: return datetime.date.max
+        for fmt in ("%d/%m/%Y", "%Y-%m-%d"):
+            try: return datetime.datetime.strptime(s[:10], fmt).date()
+            except ValueError: pass
+        return datetime.date.max
+
+    # ── 1. Catálogo TdC ──────────────────────────────────────────────────────
+    all_catalog = _get_unified_catalog_list()
+    tdc_items = [
+        (_CATALOG_TO_DB_INST.get(m['inst'], m['inst']), m['inst'], m['item'])
+        for m in all_catalog if m['cat'] == 'TdC'
+    ]  # (db_inst, disp_inst, item)
+
+    if not tdc_items:
+        _console.print("[yellow]No hay tarjetas en el catálogo.[/yellow]")
+        return
+
+    # ── 2. Deudas actuales (de saldos) ───────────────────────────────────────
+    conn = init_db()
+    conn.execute("""CREATE TABLE IF NOT EXISTS credit_limits (
+        institucion TEXT NOT NULL, item TEXT NOT NULL, cupo REAL NOT NULL,
+        PRIMARY KEY (institucion, item))""")
+    conn.commit()
+
+    rows_db = conn.execute("""
+        SELECT s.institucion, s.item, s.monto, s.timestamp
+        FROM saldos s
+        INNER JOIN (
+            SELECT institucion, item, persona, MAX(timestamp) AS max_ts
+            FROM saldos WHERE ok=1 GROUP BY institucion, item, persona
+        ) latest ON s.institucion=latest.institucion AND s.item=latest.item
+                 AND s.persona=latest.persona AND s.timestamp=latest.max_ts
+        WHERE s.ok=1
+    """).fetchall()
+    deudas = {(i, it): abs(float(m)) for i, it, m, _ in rows_db if m is not None}
+    ts_map  = {(i, it): ts for i, it, _, ts in rows_db}
+
+    # ── 3. Cupos guardados ────────────────────────────────────────────────────
+    cupos_db = {(i, it): c for i, it, c in
+                conn.execute("SELECT institucion, item, cupo FROM credit_limits").fetchall()}
+
+    # Pedir cupos faltantes
+    missing = [(db_i, d_i, it) for db_i, d_i, it in tdc_items if (db_i, it) not in cupos_db]
+    if missing:
+        _console.print("\n[bold yellow]Cupos no configurados — ingresa el límite de cada tarjeta:[/bold yellow]")
+        for db_i, d_i, it in missing:
+            val_str = questionary.text(f"  Cupo {d_i} {it} (CLP, ej: 5.000.000):", style=QUESTIONARY_STYLE).ask()
+            if val_str is None: conn.close(); return
+            try: cupo = abs(int(val_str.replace(".", "").replace(",", "").replace("$", "").strip()))
+            except Exception: cupo = 0
+            conn.execute("INSERT OR REPLACE INTO credit_limits VALUES (?,?,?)", (db_i, it, cupo))
+            conn.commit()
+            cupos_db[(db_i, it)] = cupo
+    conn.close()
+
+    # ── 4. Datos de pagos (pagos_tdc en Supabase) ─────────────────────────────
+    _migrate_pagos_tdc_to_supabase()
+    pagos_raw = _read_supabase(
+        "pagos_tdc",
+        select="institucion,card_number,card_name,periodo_hasta,pagar_hasta,facturado_clp,pagado_clp,no_facturado_clp,timestamp",
+        extra="&order=timestamp.desc"
+    )
+    # Más reciente por (institucion, card_number)
+    pagos_map = {}
+    for rec in pagos_raw:
+        k = (rec.get("institucion"), str(rec.get("card_number", "")))
+        if k not in pagos_map:
+            pagos_map[k] = rec
+
+    # ── 5. Construir filas combinadas ─────────────────────────────────────────
+    pendientes, al_dia = [], []
+    for db_inst, disp_inst, item in sorted(tdc_items, key=lambda x: x[1]):
+        deuda = deudas.get((db_inst, item), 0.0)
+        cupo  = cupos_db.get((db_inst, item), 0.0)
+        disp  = cupo - deuda
+        pct   = int(round(disp / cupo * 100)) if cupo > 0 else 0
+        ts    = ts_map.get((db_inst, item))
+
+        # Buscar pagos por los últimos 4 dígitos del item ("TdC 3134" → "3134")
+        card_digits = item.split()[-1] if item else ""
+        pago = pagos_map.get((db_inst, card_digits)) or pagos_map.get((disp_inst, card_digits))
+        if pago:
+            fac_clp   = pago.get("facturado_clp") or 0
+            paid_clp  = pago.get("pagado_clp") if pago.get("pagado_clp") is not None else (pago.get("no_facturado_clp") or 0)
+            delta_clp = fac_clp - paid_clp
+            pagar     = pago.get("pagar_hasta")
+            periodo   = pago.get("periodo_hasta")
+        else:
+            fac_clp = paid_clp = delta_clp = 0
+            pagar = periodo = None
+
+        sort_key = _parse_pagar(pagar)
+        entry = (sort_key, disp_inst, item, deuda, cupo, disp, pct, fac_clp, delta_clp, pagar, ts)
+        if delta_clp > 0:
+            pendientes.append(entry)
+        else:
+            al_dia.append(entry)
+
+    pendientes.sort(key=lambda x: x[0])
+    al_dia.sort(key=lambda x: x[0])
+
+    # ── 6. Renderizar ─────────────────────────────────────────────────────────
+    def _make_table(title_markup):
+        t = Table(
+            title=title_markup,
+            box=rbox.ROUNDED, header_style="bold sky_blue3", border_style="dim",
+            title_justify="center", show_header=True,
+            row_styles=["", "on grey15"],
+        )
+        t.add_column("Banco",       style="bold white", no_wrap=True)
+        t.add_column("Tarjeta",     style="white",      no_wrap=True, min_width=18)
+        t.add_column("Deuda",       justify="right",    width=14)
+        t.add_column("Cupo",        justify="right",    width=14)
+        t.add_column("Disponible",  justify="right",    width=14)
+        t.add_column("%",           justify="right",    width=6)
+        t.add_column("Facturado",   justify="right",    width=14)
+        t.add_column("Δ Pagar",     justify="right",    width=14)
+        t.add_column("Pagar hasta", justify="center",   width=12)
+        t.add_column("Act.",        justify="center",   width=14, style="dim")
+        return t
+
+    def _add_rows(table, entries):
+        for _, banco, tarjeta, deuda, cupo, disp, pct, fac_clp, delta_clp, pagar, ts in entries:
+            disp_col = "bright_green" if disp > 0 else ("bright_red" if disp < 0 else "white")
+            pct_col  = disp_col
+            d_col    = "bright_red" if delta_clp > 0 else "bright_green"
+            ts_fmt   = _fmt_ts(ts) if ts else "—"
+            table.add_row(
+                banco,
+                tarjeta,
+                Text(_fmt_clp(deuda),    style="bright_red" if deuda > 0 else "dim"),
+                Text(_fmt_clp(cupo),     style="white"),
+                Text(_fmt_clp(disp),     style=disp_col),
+                Text(f"{pct}%",          style=pct_col),
+                _fmt_clp(fac_clp) if fac_clp else "—",
+                Text(_fmt_clp(abs(delta_clp)) if delta_clp else "—", style=d_col if delta_clp else "dim"),
+                _fmt_date(pagar),
+                ts_fmt,
+            )
+
+    _console.print()
+    if pendientes:
+        t = _make_table("[bold white]PENDIENTES[/bold white]")
+        _add_rows(t, pendientes)
+        _console.print(t)
+        _console.print()
+    if al_dia:
+        t = _make_table("[bold white]AL DÍA[/bold white]")
+        _add_rows(t, al_dia)
+        _console.print(t)
+
+    input("\nPresiona Enter para volver al menú...")
+
+
 def show_caja():
     """Análisis de liquidez."""
 
@@ -11432,20 +11608,16 @@ def main():
         elif top_sel == "caja":
             sub = _print_table_menu("ANALIZAR CAJA", [
                 "  Activos y Pasivos de Corto Plazo",
-                "  Revisar cupos TdC",
-                "  Revisar pagos de Tarjetas de Crédito",
+                "  Tarjetas de Crédito",
                 "  « Volver",
             ])
-            # sub: 1=Activos CP, 2=Cupos TdC, 3=Pagos TdC, 4=Volver
+            # sub: 1=Activos CP, 2=TdC combinada, 3=Volver
             if sub == 1:
                 _clear_content()
                 show_caja()
             elif sub == 2:
                 _clear_content()
-                show_cupos_tdc()
-            elif sub == 3:
-                _clear_content()
-                show_pagos_tdc()
+                show_tdc()
 
         # ── COMPARAR FECHAS ─────────────────────────────────────────────────
         elif top_sel == "comparar":
