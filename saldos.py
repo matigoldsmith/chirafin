@@ -11720,16 +11720,19 @@ def main():
         elif top_sel == "caja":
             sub = _print_table_menu("ANALIZAR CAJA", [
                 "  Activos y Pasivos de Corto Plazo",
-                "  Tarjetas de Crédito",
+                "  Revisar cupos TdC",
+                "  Revisar pagos de Tarjetas de Crédito",
                 "  « Volver",
             ])
-            # sub: 1=Activos CP, 2=TdC combinada, 3=Volver
             if sub == 1:
                 _clear_content()
                 show_caja()
             elif sub == 2:
                 _clear_content()
-                show_tdc()
+                show_cupos_tdc()
+            elif sub == 3:
+                _clear_content()
+                show_pagos_tdc()
 
         # ── COMPARAR FECHAS ─────────────────────────────────────────────────
         elif top_sel == "comparar":
@@ -11740,16 +11743,12 @@ def main():
         elif top_sel == "config":
             sub = _print_table_menu("CONFIGURACIÓN", [
                 "  Gestión de scrapers",
-                "  Cupos de Tarjetas de Crédito",
                 "  Sincronizar Bitwarden",
                 "  « Volver",
             ])
             if sub == 1:
                 manage_scrapers()
             elif sub == 2:
-                _clear_content()
-                manage_cupos_tdc()
-            elif sub == 3:
                 _clear_content()
                 _console.print("\n[dim]Sincronizando Bitwarden...[/dim]")
                 result = subprocess.run(["bw", "sync"], capture_output=True, text=True, env=bw_env())
