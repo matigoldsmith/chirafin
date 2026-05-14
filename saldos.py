@@ -1238,16 +1238,18 @@ def _print_table_rows(rows, title="RESUMEN DE SALDOS", subtitle=None):
         for r_data, clp_mm, usd_m, uf in group_details:
             # Desempaquetado con soporte para campos extra (*_)
             (cat_disp, inst, persona, item, moneda_val, m_str, m_num, ts_fmt, marker, ts_iso, *extra) = r_data
-            
+
             # Extraer meta-datos si existen (están al final de 'row' en show_last_saldos)
             full_cat = extra[0] if extra else None
             bank_key = extra[1] if len(extra) > 1 else None
+            # item_code real (puede diferir de item cuando hay nota de referencia, ej: CxC/CxP)
+            real_item_code = extra[2] if len(extra) > 2 else item
 
             _LAST_TABLE_MAPPING.append({
-                'cat': full_cat or cat_disp, 
-                'inst': inst, 
-                'item': item, 
-                'moneda': moneda_val, 
+                'cat': full_cat or cat_disp,
+                'inst': inst,
+                'item': real_item_code,  # item_code del catálogo, NO el display (nota)
+                'moneda': moneda_val,
                 'val': m_num,
                 'bank_key': bank_key
             })
@@ -1952,7 +1954,8 @@ def show_last_saldos(pause=True, title="ÚLTIMO REGISTRO CONOCIDO", by_category=
             marker,
             ts[:10] if ts else None,
             item_meta['cat'], # full_cat (extra[0])
-            item_meta.get('bank_key') # bank_key (extra[1])
+            item_meta.get('bank_key'), # bank_key (extra[1])
+            item_code, # item_code real para DB/LAST_TABLE_MAPPING (extra[2])
         ))
 
 
@@ -7311,8 +7314,8 @@ def add_new_manual_type():
     
     _console.print(f"\n[bold green]OK: Registro '{item_name}' en '{inst}' ({persona}) creado con éxito.[/bold green]\n")
 
-def _actualizar_especificos():
-    """Fork de 'Actualizar algunos específicos': scraper por institución o ítem manual."""
+def _actualizar_algunos_automaticos():
+    """Submenu: correr scrapers de un grupo o institución específica."""
     while True:
         _clear_terminal_buffer()
         ans = questionary.select(
@@ -7321,7 +7324,6 @@ def _actualizar_especificos():
                 questionary.Choice("Actualizar solo inversiones",   value="inversiones"),
                 questionary.Choice("Actualizar solo bancarios",     value="bancarios"),
                 questionary.Choice("Correr scraper de institución", value="scraper"),
-                questionary.Choice("Actualizar ítem manual",        value="manual"),
                 questionary.Separator(),
                 questionary.Choice("« Volver",                      value="back"),
             ],
@@ -7433,9 +7435,6 @@ def _actualizar_especificos():
             finally:
                 _reset_terminal()
                 _clear_terminal_buffer()
-
-        elif ans == "manual":
-            prompt_manual_items()
 
 
 def prompt_manual_items(all_sequential=False):
@@ -10810,16 +10809,9 @@ def _scrape_sco_pagos_card(page, card_number, max_retries=3):
             pago_nofac       = nofac_result.get("pago", []) if isinstance(nofac_result, dict) else nofac_result
             pagado_clp_nofac = sum(parse_clp(_last_money_col(r)) for r in pago_nofac)
 
-            # Debug: TODOS los movimientos no-facturados con clasificación ✅/❌
-            pago_keys = {tuple(r) for r in pago_nofac}
-            print(f"[SCO-PAGOS] TdC {card_number} — no-fac total rows={len(all_nofac)}, pago rows={len(pago_nofac)}", flush=True)
-            print(f"[SCO-PAGOS] TdC {card_number} — DETALLE MOVIMIENTOS NO FACTURADOS:", flush=True)
-            for i, row in enumerate(all_nofac):
-                is_pago = tuple(row) in pago_keys
-                marker  = "✅ PAGO" if is_pago else "❌  no "
-                monto_str = f" → monto={_last_money_col(row)}" if is_pago else ""
-                print(f"  [{marker}] [{i:02d}] {row}{monto_str}", flush=True)
-            print(f"[SCO-PAGOS] TdC {card_number} — TOTAL pagado CLP no-fac: {pagado_clp_nofac:,.0f}", flush=True)
+            if DEBUG:
+                pago_keys = {tuple(r) for r in pago_nofac}
+                print(f"[SCO-PAGOS] TdC {card_number} — no-fac rows={len(all_nofac)}, pagos={len(pago_nofac)}, total={pagado_clp_nofac:,.0f}", flush=True)
 
             # Pagos USD en no-facturados — click tab Internacionales
             neg_intl_nofac = []
@@ -10840,7 +10832,7 @@ def _scrape_sco_pagos_card(page, card_number, max_retries=3):
                 _sco_click_ver_mas(frame, page)
                 neg_intl_nofac = _extract_neg_intl(frame)
             except Exception as e_intl:
-                print(f"[SCO-PAGOS] TdC {card_number} — intl no-facturados: {e_intl}", flush=True)
+                if DEBUG: print(f"[SCO-PAGOS] TdC {card_number} — intl no-facturados: {e_intl}", flush=True)
 
             pagado_clp = pagado_clp_nofac
             pagado_usd = sum(parse_usd(_last_money_col(r)) for r in neg_intl_nofac)
@@ -11395,26 +11387,30 @@ def main():
 
         # ── ACTUALIZAR DATOS ────────────────────────────────────────────────
         elif top_sel == "actualizar":
-            sub = _print_table_menu("ACTUALIZAR DATOS", [
-                "  Actualizar automáticos",
-                "  Actualizar algunos específicos",
-                "  « Volver",
-            ])
-            # sub: 1=Automáticos, 2=Específicos, 3=Volver
-            if sub == 1:
-                try:
-                    bw_unlock()
-                    run_scraping(list(INSTITUTION_ITEMS), full_update=True)
-                except Exception as e_scrape:
-                    _console.print(f"\n[bold red][ERROR] Scraping falló: {e_scrape}[/bold red]")
-                finally:
-                    _reset_terminal()
-                    _clear_terminal_buffer()
-                _console.print("\n[bold green]✓ Actualización de bancos y ETFs completada.[/bold green]")
-                _console.print("[dim]Regresando al menú principal...[/dim]\n")
-            elif sub == 2:
-                _actualizar_especificos()
-            # sub == 3 → volver al top
+            while True:
+                sub = _print_table_menu("ACTUALIZAR DATOS", [
+                    "  Actualizar todos los automáticos",
+                    "  Actualizar algunos automáticos",
+                    "  Actualizar algún registro particular",
+                    "  « Volver",
+                ])
+                # sub: 1=Todos auto, 2=Algunos auto, 3=Registro particular, 4=Volver
+                if sub == 1:
+                    try:
+                        bw_unlock()
+                        run_scraping(list(INSTITUTION_ITEMS), full_update=True)
+                    except Exception as e_scrape:
+                        _console.print(f"\n[bold red][ERROR] Scraping falló: {e_scrape}[/bold red]")
+                    finally:
+                        _reset_terminal()
+                        _clear_terminal_buffer()
+                    _console.print("\n[bold green]✓ Actualización completada.[/bold green]")
+                elif sub == 2:
+                    _actualizar_algunos_automaticos()
+                elif sub == 3:
+                    prompt_manual_items()
+                else:
+                    break  # Volver al top
 
         # ── VISUALIZAR PATRIMONIO ───────────────────────────────────────────
         elif top_sel == "visualizar":
