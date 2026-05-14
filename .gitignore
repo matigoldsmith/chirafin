@@ -1,3 +1,68 @@
-venv/
+# Credenciales y sesiones
+.env
+*_session.json
+harvard.json
+schwab_session.json
+santander_session.json
+santander_dl_session.json
+wealthfront_session.json
+racional_session.json
+btg_session.json
+btg_pj_session.json
+fintual_session.json
+fintual_pj_session.json
+
+# Bases de datos locales
+*.db
+*.sqlite
+
+# Python
 __pycache__/
 *.pyc
+venv/
+.venv/
+
+# Logs
+*.log
+
+# macOS
+.DS_Store
+
+# Backups
+backups/
+
+# Archivos temporales / one-off
+tmp_*.py
+fix_*.py
+test_*.py
+add_*.py
+migrate_*.py
+
+# Auth tokens
+auth/
+whatsapp_otp/
+
+# Memoria interna Cowork
+memory/
+
+# Secrets
+.github_token
+
+# Claude Code internals
+.claude/
+
+# GastoSmart DB y env
+GastoSmart/backend/*.db
+GastoSmart/backend/.env
+GastoSmart/backend/__pycache__/
+GastoSmart/backend/*.log
+GastoSmart/backend/.email_last_run
+GastoSmart/backend/.fuse_*
+
+# Archivos HTML generados
+chirafin*.html
+chirafin2.html
+chirafin_v2.html
+
+# Reportes generados
+"Reporte Saldos"/

@@ -1,0 +1,12 @@
+fastapi
+uvicorn
+python-multipart
+requests
+py-airtable
+python-dotenv
+pillow
+pillow-heif
+google-generativeai
+anthropic
+supabase
+pymupdf

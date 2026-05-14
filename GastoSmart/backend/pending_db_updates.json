@@ -1,0 +1,146 @@
+[
+  {
+    "timestamp": "2026-03-20T20:04:46.503476",
+    "sql": "UPDATE gastos SET foto_url=?, foto_path=? WHERE id=?",
+    "params": [
+      "https://wxkwrlrgloibvaetlrso.supabase.co/storage/v1/object/public/receipts/ed347ced_1774047706_IMG_3550.jpeg",
+      "/sessions/happy-intelligent-mendel/mnt/com~apple~CloudDocs--GastoSmart/IMG_3550.jpeg",
+      6138
+    ],
+    "description": "retry upload IMG_3550.jpeg",
+    "applied": true,
+    "applied_at": "2026-03-21T18:47:35.633388"
+  },
+  {
+    "timestamp": "2026-03-20T20:04:46.506961",
+    "sql": "UPDATE gastos SET foto_url=?, foto_path=? WHERE id=?",
+    "params": [
+      "https://wxkwrlrgloibvaetlrso.supabase.co/storage/v1/object/public/receipts/060eccb8_1774047706_IMG_3561.jpeg",
+      "/sessions/happy-intelligent-mendel/mnt/com~apple~CloudDocs--GastoSmart/IMG_3561.jpeg",
+      6139
+    ],
+    "description": "retry upload IMG_3561.jpeg",
+    "applied": true,
+    "applied_at": "2026-03-21T18:47:35.633640"
+  },
+  {
+    "timestamp": "2026-03-20T20:04:46.508304",
+    "sql": "UPDATE gastos SET foto_url=?, foto_path=? WHERE id=?",
+    "params": [
+      "https://wxkwrlrgloibvaetlrso.supabase.co/storage/v1/object/public/receipts/9e0a35ae_1774047705_IMG_3543.jpeg",
+      "/sessions/happy-intelligent-mendel/mnt/com~apple~CloudDocs--GastoSmart/IMG_3543.jpeg",
+      6140
+    ],
+    "description": "retry upload IMG_3543.jpeg",
+    "applied": true,
+    "applied_at": "2026-03-21T18:47:35.633875"
+  },
+  {
+    "timestamp": "2026-03-20T20:04:46.509312",
+    "sql": "UPDATE gastos SET foto_url=?, foto_path=? WHERE id=?",
+    "params": [
+      "https://wxkwrlrgloibvaetlrso.supabase.co/storage/v1/object/public/receipts/734056f9_1774047704_IMG_3555.jpeg",
+      "/sessions/happy-intelligent-mendel/mnt/com~apple~CloudDocs--GastoSmart/IMG_3555.jpeg",
+      6141
+    ],
+    "description": "retry upload IMG_3555.jpeg",
+    "applied": true,
+    "applied_at": "2026-03-21T18:47:35.634107"
+  },
+  {
+    "timestamp": "2026-03-20T20:04:46.510129",
+    "sql": "UPDATE gastos SET foto_url=?, foto_path=? WHERE id=?",
+    "params": [
+      "https://wxkwrlrgloibvaetlrso.supabase.co/storage/v1/object/public/receipts/56847286_1774047704_IMG_3538.jpeg",
+      "/sessions/happy-intelligent-mendel/mnt/com~apple~CloudDocs--GastoSmart/IMG_3538.jpeg",
+      6142
+    ],
+    "description": "retry upload IMG_3538.jpeg",
+    "applied": true,
+    "applied_at": "2026-03-21T18:47:35.634294"
+  },
+  {
+    "timestamp": "2026-03-20T20:04:46.510819",
+    "sql": "UPDATE gastos SET foto_url=?, foto_path=? WHERE id=?",
+    "params": [
+      "https://wxkwrlrgloibvaetlrso.supabase.co/storage/v1/object/public/receipts/39ee9d53_1774047703_IMG_3569.jpeg",
+      "/sessions/happy-intelligent-mendel/mnt/com~apple~CloudDocs--GastoSmart/IMG_3569.jpeg",
+      6143
+    ],
+    "description": "retry upload IMG_3569.jpeg",
+    "applied": true,
+    "applied_at": "2026-03-21T18:47:35.634492"
+  },
+  {
+    "timestamp": "2026-03-20T20:08:33.796507",
+    "sql": "UPDATE gastos SET foto_url=?, foto_path=? WHERE id=?",
+    "params": [
+      "https://wxkwrlrgloibvaetlrso.supabase.co/storage/v1/object/public/receipts/39ee9d53_1774048112_IMG_3569.jpeg",
+      "/sessions/intelligent-gallant-bell/mnt/com~apple~CloudDocs--GastoSmart/IMG_3569.jpeg",
+      6143
+    ],
+    "description": "retry upload IMG_3569.jpeg",
+    "applied": true,
+    "applied_at": "2026-03-21T18:47:35.634686"
+  },
+  {
+    "timestamp": "2026-03-20T20:08:34.913203",
+    "sql": "UPDATE gastos SET foto_url=?, foto_path=? WHERE id=?",
+    "params": [
+      "https://wxkwrlrgloibvaetlrso.supabase.co/storage/v1/object/public/receipts/56847286_1774048113_IMG_3538.jpeg",
+      "/sessions/intelligent-gallant-bell/mnt/com~apple~CloudDocs--GastoSmart/IMG_3538.jpeg",
+      6142
+    ],
+    "description": "retry upload IMG_3538.jpeg",
+    "applied": true,
+    "applied_at": "2026-03-21T18:47:35.634874"
+  },
+  {
+    "timestamp": "2026-03-20T20:08:35.834908",
+    "sql": "UPDATE gastos SET foto_url=?, foto_path=? WHERE id=?",
+    "params": [
+      "https://wxkwrlrgloibvaetlrso.supabase.co/storage/v1/object/public/receipts/734056f9_1774048114_IMG_3555.jpeg",
+      "/sessions/intelligent-gallant-bell/mnt/com~apple~CloudDocs--GastoSmart/IMG_3555.jpeg",
+      6141
+    ],
+    "description": "retry upload IMG_3555.jpeg",
+    "applied": true,
+    "applied_at": "2026-03-21T18:47:35.635067"
+  },
+  {
+    "timestamp": "2026-03-20T20:08:36.654405",
+    "sql": "UPDATE gastos SET foto_url=?, foto_path=? WHERE id=?",
+    "params": [
+      "https://wxkwrlrgloibvaetlrso.supabase.co/storage/v1/object/public/receipts/9e0a35ae_1774048115_IMG_3543.jpeg",
+      "/sessions/intelligent-gallant-bell/mnt/com~apple~CloudDocs--GastoSmart/IMG_3543.jpeg",
+      6140
+    ],
+    "description": "retry upload IMG_3543.jpeg",
+    "applied": true,
+    "applied_at": "2026-03-21T18:47:35.635259"
+  },
+  {
+    "timestamp": "2026-03-20T20:08:37.473863",
+    "sql": "UPDATE gastos SET foto_url=?, foto_path=? WHERE id=?",
+    "params": [
+      "https://wxkwrlrgloibvaetlrso.supabase.co/storage/v1/object/public/receipts/060eccb8_1774048116_IMG_3561.jpeg",
+      "/sessions/intelligent-gallant-bell/mnt/com~apple~CloudDocs--GastoSmart/IMG_3561.jpeg",
+      6139
+    ],
+    "description": "retry upload IMG_3561.jpeg",
+    "applied": true,
+    "applied_at": "2026-03-21T18:47:35.635472"
+  },
+  {
+    "timestamp": "2026-03-20T20:08:38.093079",
+    "sql": "UPDATE gastos SET foto_url=?, foto_path=? WHERE id=?",
+    "params": [
+      "https://wxkwrlrgloibvaetlrso.supabase.co/storage/v1/object/public/receipts/ed347ced_1774048117_IMG_3550.jpeg",
+      "/sessions/intelligent-gallant-bell/mnt/com~apple~CloudDocs--GastoSmart/IMG_3550.jpeg",
+      6138
+    ],
+    "description": "retry upload IMG_3550.jpeg",
+    "applied": true,
+    "applied_at": "2026-03-21T18:47:35.635662"
+  }
+]

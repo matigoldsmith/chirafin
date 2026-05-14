@@ -1,0 +1,36 @@
+[
+  {
+    "path": "/tmp/gs_email_attachments/586294b147cba6bf8246e2d4a9cd9e219e42b72409c7c31d009be8708ce6dea1.pdf",
+    "fname": "Invoice-J49XDXYR-0007.pdf",
+    "hash": "586294b147cba6bf8246e2d4a9cd9e219e42b72409c7c31d009be8708ce6dea1",
+    "es_recibo": true,
+    "fecha": "2026-04-23",
+    "comercio": "Anthropic, PBC",
+    "monto": 23.80,
+    "moneda": "USD",
+    "categoria_sugerida": "Software",
+    "numero_boleta": "J49XDXYR-0007",
+    "_modelo": "claude-vision",
+    "source_type": "email",
+    "email_id": "<0100019dbcf3c3a5-7d51f460-993d-493f-9f55-5f659223367c-000000@email.amazonses.com>",
+    "email_from": "\"Anthropic, PBC\" <invoice+statements@mail.anthropic.com>",
+    "email_subject": "Your receipt from Anthropic, PBC #2887-2761-5978"
+  },
+  {
+    "path": "/tmp/gs_email_attachments/a84f3838173245a1932796e93c3ecb33e7dbe06638fd0e8bd55a4dcb72824403.pdf",
+    "fname": "Receipt-2887-2761-5978.pdf",
+    "hash": "a84f3838173245a1932796e93c3ecb33e7dbe06638fd0e8bd55a4dcb72824403",
+    "es_recibo": true,
+    "fecha": "2026-04-23",
+    "comercio": "Anthropic, PBC",
+    "monto": 23.80,
+    "moneda": "USD",
+    "categoria_sugerida": "Software",
+    "numero_boleta": "2887-2761-5978",
+    "_modelo": "claude-vision",
+    "source_type": "email",
+    "email_id": "<0100019dbcf3c3a5-7d51f460-993d-493f-9f55-5f659223367c-000000@email.amazonses.com>",
+    "email_from": "\"Anthropic, PBC\" <invoice+statements@mail.anthropic.com>",
+    "email_subject": "Your receipt from Anthropic, PBC #2887-2761-5978"
+  }
+]
