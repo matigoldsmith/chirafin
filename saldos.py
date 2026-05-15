@@ -5300,17 +5300,20 @@ def _racional_get_en_progreso_extra(page):
                     condition = True
                     print(f"[RACIONAL-PROG] ✓ URL status=toSendToWithdrawalsApi", flush=True)
 
-                # Método 2 (fallback): "Transferenciarealizada" no seguida de fecha DD/MM/YY
+                # Método 2 (fallback): paso3 "Acciones vendidas" con fecha + paso4 "Transferencia realizada" sin fecha
                 if not condition:
                     flat = detail_text.replace('\n', ' ')
-                    m_step = _re.search(r'Transferencia\s*realizada(.{0,30})', flat, _re.IGNORECASE)
-                    if m_step:
-                        after = m_step.group(1).strip()
-                        has_date = bool(_re.match(r'\d{2}/\d{2}/\d{2}', after))
-                        condition = not has_date
-                        print(f"[RACIONAL-PROG] Texto paso4 after='{after}' → cond={condition}", flush=True)
+                    m_step3 = _re.search(r'Acciones\s*vendidas(.{0,30})',      flat, _re.IGNORECASE)
+                    m_step4 = _re.search(r'Transferencia\s*realizada(.{0,30})', flat, _re.IGNORECASE)
+                    if m_step3 and m_step4:
+                        after3 = m_step3.group(1).strip()
+                        after4 = m_step4.group(1).strip()
+                        step3_done = bool(_re.match(r'\d{2}/\d{2}/\d{2}', after3))
+                        step4_done = bool(_re.match(r'\d{2}/\d{2}/\d{2}', after4))
+                        condition = step3_done and not step4_done
+                        print(f"[RACIONAL-PROG] paso3='{after3}' done={step3_done} | paso4='{after4}' done={step4_done} → cond={condition}", flush=True)
                     else:
-                        print(f"[RACIONAL-PROG] Paso4 no encontrado en texto.", flush=True)
+                        print(f"[RACIONAL-PROG] No se encontraron pasos 3/4 en texto.", flush=True)
 
                 if condition:
                     extra += amt
