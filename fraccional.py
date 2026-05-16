@@ -21,13 +21,14 @@ _console = Console()
 DB_PATH = Path(__file__).parent / "fraccional.db"
 
 QUESTIONARY_STYLE = questionary.Style([
-    ('qmark',       'fg:#5f87ff bold'),
+    ('qmark',       'fg:#ff8700 bold'),
     ('question',    'bold'),
-    ('answer',      'fg:#5fafff bold'),
-    ('pointer',     'fg:#5f87ff bold'),
-    ('highlighted', 'fg:#5fafff bold'),
-    ('selected',    'fg:#5fafff'),
-    ('separator',   'fg:#5f87ff'),
+    ('answer',      'fg:#ff8700 bold'),
+    ('pointer',     'fg:#ff8700 bold'),
+    ('highlighted', 'fg:#ff8700 bold'),
+    ('selected',    'fg:#ff8700'),
+    ('separator',   'fg:#444444'),
+    ('instruction', 'fg:#888888'),
 ])
 
 # ── Parámetros persistidos en DB ───────────────────────────────────
@@ -89,13 +90,13 @@ def _print_banner():
     fecha_mod = f"{dt.day:02d} {_MESES[dt.month-1]} {dt.year}, {dt.strftime('%H:%M')}"
     ultima = _get_ultima_extraccion()
     _console.print()
-    _console.print("  [bold sky_blue3]FRACCIONAL[/bold sky_blue3]")
+    _console.print("  [bold orange1]FRACCIONAL[/bold orange1]")
     _console.print(f"  [dim]Código actualizado el {fecha_mod}[/dim]", highlight=False)
     if ultima:
         _console.print(f"  [dim]Última extracción: {ultima}[/dim]", highlight=False)
     else:
         _console.print(f"  [dim]Última extracción: sin datos[/dim]", highlight=False)
-    _console.print(Rule(style="dim sky_blue3"))
+    _console.print(Rule(style="dim orange1"))
 
 def _clear_content():
     _console.print(Rule(style="dim #2a2a2a"))
@@ -161,16 +162,15 @@ def menu_analizar():
     try:
         import fraccional_ver as fver
         _clear_content()
-        fver.view_por_purchase(
+        fver.menu_analisis(
             tasa_dap=params["tasa_dap"],
-            max_cuotas=int(params["max_cuotas"]),
             premium=params["premium"],
+            max_cuotas=int(params["max_cuotas"]),
         )
     except Exception as e:
         _console.print(f"[bold red]Error en análisis: {e}[/bold red]")
         import traceback; traceback.print_exc()
-
-    input("\nPresiona Enter para volver al menú...")
+        input("\nPresiona Enter para volver al menú...")
 
 # ── Opción 3: Definir parámetros ───────────────────────────────────
 def menu_parametros():
@@ -227,7 +227,7 @@ def menu_parametros():
 
         elif sel == "cuotas":
             raw = questionary.text(
-                f"  Nuevo máximo de cuotas (actual {int(params['max_cuotas'])}) — ej: 24:",
+                f"  Nuevo máximo de cuotas (actual {int(params['max_cuotas'])}) — ej: 12:",
                 style=QUESTIONARY_STYLE,
             ).ask()
             if raw:
@@ -240,6 +240,102 @@ def menu_parametros():
                 except ValueError:
                     _console.print("  [red]Valor inválido (debe ser entero >= 1)[/red]")
 
+# ── Opción 4: Configurar cuotas por compra ─────────────────────────
+def menu_cuotas():
+    import fraccional_scraper as frac
+    conn = sqlite3.connect(str(DB_PATH))
+    conn.row_factory = sqlite3.Row
+
+    # Traer todas las compras activas con su cuotas actual
+    rows = conn.execute("""
+        SELECT m.purchase_confirmation_id AS pid,
+               m.persona,
+               m.unit_name,
+               m.unit_id,
+               m.confirmed_at,
+               m.bid_preferred_amount AS inv,
+               COALESCE(c.num_cuotas, 6) AS cuotas
+        FROM fraccional_movimientos m
+        LEFT JOIN fraccional_config c
+               ON c.purchase_confirmation_id = m.purchase_confirmation_id
+              AND c.persona = m.persona
+        WHERE m.status = 'active'
+          AND m.kind IN ('purchase','market')
+        ORDER BY m.unit_name, m.confirmed_at
+    """).fetchall()
+    conn.close()
+
+    if not rows:
+        _console.print("\n[yellow]Sin compras activas.[/yellow]")
+        input("\nEnter para volver...")
+        return
+
+    while True:
+        _clear_content()
+        _console.print("\n  [bold]Cuotas por compra[/bold]")
+        _console.print("  [dim]Seleccioná una compra para cambiar sus cuotas[/dim]\n")
+
+        # Reagrupar por propiedad para el display
+        choices = []
+        prev_prop = None
+        for r in rows:
+            prop = r["unit_name"] or r["unit_id"]
+            if prop != prev_prop:
+                choices.append(questionary.Separator(f"── {prop} ──"))
+                prev_prop = prop
+            fecha = (r["confirmed_at"] or "")[:10]
+            label = (f"  {r['persona']:2}  {fecha}  "
+                     f"${r['inv']:>12,.0f}  →  {r['cuotas']} cuotas")
+            choices.append(questionary.Choice(label, value=dict(r)))
+
+        choices.append(questionary.Separator())
+        choices.append(questionary.Choice("  « Volver", value="back"))
+
+        sel = questionary.select(
+            "", choices=choices, style=QUESTIONARY_STYLE, pointer="»", qmark="",
+        ).ask(patch_stdout=True)
+
+        if not sel or sel == "back":
+            return
+
+        # Editar cuotas de la compra seleccionada
+        pid, persona, cuotas_act = sel["pid"], sel["persona"], sel["cuotas"]
+        raw = questionary.text(
+            f"  Cuotas actuales: {cuotas_act}  — Nueva cantidad (Enter para mantener):",
+            style=QUESTIONARY_STYLE,
+        ).ask()
+
+        if raw and raw.strip():
+            try:
+                n = int(raw.strip())
+                if n < 1:
+                    raise ValueError
+                frac.set_num_cuotas(pid, persona, n)
+                _console.print(f"  [green]✓ Actualizado a {n} cuotas[/green]")
+                # Refrescar rows para reflejar el cambio
+                conn2 = sqlite3.connect(str(DB_PATH))
+                conn2.row_factory = sqlite3.Row
+                rows = conn2.execute("""
+                    SELECT m.purchase_confirmation_id AS pid,
+                           m.persona,
+                           m.unit_name,
+                           m.unit_id,
+                           m.confirmed_at,
+                           m.bid_preferred_amount AS inv,
+                           COALESCE(c.num_cuotas, 6) AS cuotas
+                    FROM fraccional_movimientos m
+                    LEFT JOIN fraccional_config c
+                           ON c.purchase_confirmation_id = m.purchase_confirmation_id
+                          AND c.persona = m.persona
+                    WHERE m.status = 'active'
+                      AND m.kind IN ('purchase','market')
+                    ORDER BY m.unit_name, m.confirmed_at
+                """).fetchall()
+                conn2.close()
+            except ValueError:
+                _console.print("  [red]Valor inválido (debe ser entero >= 1)[/red]")
+
+
 # ── Main ───────────────────────────────────────────────────────────
 def main():
     _print_banner()
@@ -251,6 +347,8 @@ def main():
                 choices=[
                     questionary.Choice("  Actualizar datos",    value="actualizar"),
                     questionary.Choice("  Analizar datos",      value="analizar"),
+                    questionary.Separator(),
+                    questionary.Choice("  Configurar cuotas",   value="cuotas"),
                     questionary.Choice("  Definir parámetros",  value="params"),
                     questionary.Separator(),
                     questionary.Choice("  Salir",               value="salir"),
@@ -268,6 +366,10 @@ def main():
 
             elif sel == "analizar":
                 menu_analizar()
+                _print_banner()
+
+            elif sel == "cuotas":
+                menu_cuotas()
                 _print_banner()
 
             elif sel == "params":

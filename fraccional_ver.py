@@ -428,10 +428,10 @@ def _view_por_purchase_unificado(conn, tasa_dap, max_cuotas, premium):
     # Mostrar tablas por recomendación
     COMPRA_CLAVES = {"comprar_urgente", "comprar_sin_restriccion"}
     orden_desc = [
-        ("vender_malo",            "VENDER (activo malo)",                       "TIR B < 0 -> el activo destruye valor incluso sin comision"),
-        ("vender_bajo_dap",        "VENDER (rinde menos que DAP)",               f"TIR D < tasa_dap {tasa_dap*100:.1f}% -> ni apalancado supera el costo de oportunidad"),
         ("comprar_urgente",        "INTENTAR COMPRAR (prioridad)",               f"TIR A > {umbral*1.5*100:.1f}% (1.5x umbral) -> oportunidad destacada, usar max {max_cuotas} cuotas"),
         ("comprar_sin_restriccion","INTENTAR COMPRAR (menor prioridad)",         f"TIR A > umbral {umbral*100:.1f}% -> usar max {max_cuotas} cuotas"),
+        ("vender_malo",            "VENDER (activo malo)",                       "TIR B < 0 -> el activo destruye valor incluso sin comision"),
+        ("vender_bajo_dap",        "VENDER (rinde menos que DAP)",               f"TIR D < tasa_dap {tasa_dap*100:.1f}% -> ni apalancado supera el costo de oportunidad"),
         ("comprar_apalancado",     "COMPRAR mas (solo apalancado)",              f"TIR A <= umbral pero TIR C supera umbral -> usar max {max_cuotas} cuotas"),
         ("mantener",               "MANTENER",                                   "No cumple criterio de venta ni de compra"),
         ("esperar",                "ESPERAR (poca data)",                        "dias <= 90 o TIR no calculable -> evaluar mas adelante"),

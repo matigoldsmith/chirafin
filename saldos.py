@@ -39,6 +39,18 @@ import email as _email_lib
 import email.utils as _email_utils
 from rich import print as rprint
 
+# ── Fraccional (módulo separado) ────────────────────────────────────────────
+try:
+    from fraccional import (
+        menu_actualizar  as _frac_menu_actualizar,
+        menu_analizar    as _frac_menu_analizar,
+        menu_parametros  as _frac_menu_parametros,
+        menu_cuotas      as _frac_menu_cuotas,
+    )
+    _FRACCIONAL_AVAILABLE = True
+except ImportError:
+    _FRACCIONAL_AVAILABLE = False
+
 _console = Console()
 
 # ── Supabase Configuration ─────────────────────────────────────
@@ -11687,17 +11699,22 @@ def main():
         _reset_terminal()
         _clear_terminal_buffer()
 
+        _frac_choice = questionary.Choice("  Fraccional", value="fraccional") if _FRACCIONAL_AVAILABLE else None
+        _top_choices = [
+            questionary.Choice("  Actualizar datos",       value="actualizar"),
+            questionary.Choice("  Visualizar patrimonio",  value="visualizar"),
+            questionary.Choice("  Analizar caja",          value="caja"),
+            questionary.Choice("  Comparar fechas",        value="comparar"),
+            questionary.Choice("  Configuración",           value="config"),
+        ]
+        if _frac_choice:
+            _top_choices.append(questionary.Separator())
+            _top_choices.append(_frac_choice)
+        _top_choices += [questionary.Separator(), questionary.Choice("  Salir", value="salir")]
+
         top_sel = questionary.select(
             "",
-            choices=[
-                questionary.Choice("  Actualizar datos",       value="actualizar"),
-                questionary.Choice("  Visualizar patrimonio",  value="visualizar"),
-                questionary.Choice("  Analizar caja",          value="caja"),
-                questionary.Choice("  Comparar fechas",        value="comparar"),
-                questionary.Choice("  Configuración",           value="config"),
-                questionary.Separator(),
-                questionary.Choice("  Salir",                  value="salir"),
-            ],
+            choices=_top_choices,
             style=ORANGE_MENU_STYLE,
             pointer="»",
             qmark="",
@@ -11792,6 +11809,27 @@ def main():
                     _console.print("[bold red]✗ Error al sincronizar Bitwarden[/bold red]")
                     _console.print(f"[dim]{result.stderr.strip()}[/dim]")
                 input("\nPresiona Enter para continuar...")
+
+        # ── FRACCIONAL ──────────────────────────────────────────────────────
+        elif top_sel == "fraccional" and _FRACCIONAL_AVAILABLE:
+            while True:
+                sub = _print_table_menu("FRACCIONAL", [
+                    "  Actualizar datos",
+                    "  Analizar datos",
+                    "  Configurar cuotas",
+                    "  Definir parámetros",
+                    "  « Volver",
+                ])
+                if sub == 1:
+                    _frac_menu_actualizar()
+                elif sub == 2:
+                    _frac_menu_analizar()
+                elif sub == 3:
+                    _frac_menu_cuotas()
+                elif sub == 4:
+                    _frac_menu_parametros()
+                else:
+                    break
 
     except KeyboardInterrupt:
         pass
