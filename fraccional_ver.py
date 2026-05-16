@@ -400,21 +400,76 @@ def _view_por_purchase_unificado(conn, tasa_dap, max_cuotas, premium):
     grupos["comprar_sin_restriccion"].sort(key=lambda x: x[11] if x[11] is not None else -999, reverse=True)
     grupos["comprar_apalancado"].sort(key=lambda x: x[13] if x[13] is not None else -999, reverse=True)
     grupos["mantener"].sort(key=lambda x: x[15] if x[15] is not None else 9999)  # menor hold primero
+    # Helper: agrega filas de compra por propiedad usando TIRs de portafolio
+    def _agregar_compra_por_prop(filas_grupo):
+        by_uid = defaultdict(list)
+        for fila in filas_grupo:
+            by_uid[fila[3]].append(fila)
+        result = []
+        for uid, rows in by_uid.items():
+            inv_total = sum(r[7] for r in rows)
+            val_total = sum(r[8] for r in rows)
+            gan_total = val_total - inv_total
+            rent = (val_total / inv_total - 1) * 100 if inv_total > 0 else None
+            dias_pond = sum(r[5] * r[7] for r in rows)
+            dias_prom = int(dias_pond / inv_total) if inv_total > 0 else 0
+            prop_data = totales_por_propiedad.get(uid, {})
+            result.append({
+                "uid": uid, "name": rows[0][2], "n": len(rows), "dias": dias_prom,
+                "inv": inv_total, "val": val_total, "gan": gan_total, "rent": rent,
+                "ta": calcular_tir_portafolio(prop_data.get("flujos_a", [])),
+                "tb": calcular_tir_portafolio(prop_data.get("flujos_b", [])),
+                "tc": calcular_tir_portafolio(prop_data.get("flujos_c", [])),
+                "td": calcular_tir_portafolio(prop_data.get("flujos_d", [])),
+            })
+        result.sort(key=lambda x: x["ta"] if x["ta"] is not None else -999, reverse=True)
+        return result
+
     # Mostrar tablas por recomendación
+    COMPRA_CLAVES = {"comprar_urgente", "comprar_sin_restriccion"}
     orden_desc = [
-        ("vender_malo",           "VENDER (activo malo)",              "TIR B < 0 -> el activo destruye valor incluso sin comision"),
-        ("vender_bajo_dap",       "VENDER (rinde menos que DAP)",      f"TIR D < tasa_dap {tasa_dap*100:.1f}% -> ni apalancado supera el costo de oportunidad"),
-        ("comprar_urgente",       "COMPRAR URGENTE",                   f"TIR A > {umbral*1.5*100:.1f}% (1.5x umbral) -> oportunidad destacada, usar max {max_cuotas} cuotas"),
-        ("comprar_sin_restriccion","COMPRAR mas",                      f"TIR A > umbral {umbral*100:.1f}% -> usar max {max_cuotas} cuotas"),
-        ("comprar_apalancado",    "COMPRAR mas (solo apalancado)",     f"TIR A <= umbral pero TIR C supera umbral -> usar max {max_cuotas} cuotas"),
-        ("mantener",              "MANTENER",                          "No cumple criterio de venta ni de compra"),
-        ("esperar",               "ESPERAR (poca data)",               "dias <= 90 o TIR no calculable -> evaluar mas adelante"),
+        ("vender_malo",            "VENDER (activo malo)",                       "TIR B < 0 -> el activo destruye valor incluso sin comision"),
+        ("vender_bajo_dap",        "VENDER (rinde menos que DAP)",               f"TIR D < tasa_dap {tasa_dap*100:.1f}% -> ni apalancado supera el costo de oportunidad"),
+        ("comprar_urgente",        "INTENTAR COMPRAR (prioridad)",               f"TIR A > {umbral*1.5*100:.1f}% (1.5x umbral) -> oportunidad destacada, usar max {max_cuotas} cuotas"),
+        ("comprar_sin_restriccion","INTENTAR COMPRAR (menor prioridad)",         f"TIR A > umbral {umbral*100:.1f}% -> usar max {max_cuotas} cuotas"),
+        ("comprar_apalancado",     "COMPRAR mas (solo apalancado)",              f"TIR A <= umbral pero TIR C supera umbral -> usar max {max_cuotas} cuotas"),
+        ("mantener",               "MANTENER",                                   "No cumple criterio de venta ni de compra"),
+        ("esperar",                "ESPERAR (poca data)",                        "dias <= 90 o TIR no calculable -> evaluar mas adelante"),
     ]
     _console.print("\n[bold sky_blue3]Resumen por recomendacion (PN y PJ juntos)[/bold sky_blue3]")
     for clave, titulo, condicion in orden_desc:
-        if grupos[clave]:
-            _console.print(f"\n[bold]{titulo}[/bold]")
-            _console.print(f"[dim]{condicion}[/dim]")
+        if not grupos[clave]:
+            continue
+        _console.print(f"\n[bold]{titulo}[/bold]")
+        _console.print(f"[dim]{condicion}[/dim]")
+
+        if clave in COMPRA_CLAVES:
+            # Tabla agregada por propiedad
+            filas_prop = _agregar_compra_por_prop(grupos[clave])
+            t = Table(box=rich_box.SIMPLE_HEAVY, show_header=True, header_style="bold", highlight=True)
+            t.add_column("Activo", style="white", max_width=45, overflow="ellipsis")
+            t.add_column("ID", style="dim", width=6, overflow="ellipsis")
+            t.add_column("#", justify="right", style="dim", width=3)
+            t.add_column("Dias prom", justify="right", width=9)
+            t.add_column("Inv. total", justify="right", style="cyan", width=11)
+            t.add_column("Valor act", justify="right", style="green", width=11)
+            t.add_column("Ganancia", justify="right", width=11)
+            t.add_column("Rent.%", justify="right", width=6)
+            t.add_column("TIR A", justify="right", width=7)
+            t.add_column("TIR B", justify="right", width=7)
+            t.add_column("TIR C", justify="right", width=7)
+            t.add_column("TIR D", justify="right", width=7)
+            for p in filas_prop:
+                t.add_row(
+                    p["name"], p["uid"], str(p["n"]), str(p["dias"]),
+                    fmtnum(p["inv"]), fmtnum(p["val"]),
+                    colored(p["gan"], signed=True), colored(p["rent"], pct_str),
+                    colored(p["ta"], pct_str), colored(p["tb"], pct_str),
+                    colored(p["tc"], pct_str), colored(p["td"], pct_str),
+                )
+            _console.print(t)
+        else:
+            # Tabla por purchase
             t = Table(box=rich_box.SIMPLE_HEAVY, show_header=True, header_style="bold", highlight=True)
             t.add_column("ID Compra", style="dim", max_width=12, overflow="ellipsis")
             t.add_column("Tipo", style="dim", width=4)
@@ -443,7 +498,7 @@ def _view_por_purchase_unificado(conn, tasa_dap, max_cuotas, premium):
                     colored(ta, pct_str), colored(tb, pct_str), colored(tc, pct_str), colored(td, pct_str),
                 ]
                 if show_hold:
-                    row_cells.append(str(hold_m) if hold_m is not None else "[dim]—[/dim]")
+                    row_cells.append(str(hold_m) if hold_m is not None else "[dim]∞[/dim]")
                 t.add_row(*row_cells)
             _console.print(t)
     # --- Tabla resumen por tipo (PN, PJ, TOTAL) ---
@@ -497,6 +552,7 @@ def _view_por_purchase_unificado(conn, tasa_dap, max_cuotas, premium):
     tir_b_total = calcular_tir_portafolio(flujos_b_total)
     tir_c_total = calcular_tir_portafolio(flujos_c_total)
     tir_d_total = calcular_tir_portafolio(flujos_d_total)
+    resumen_tabla.add_row(*[""] * 10)
     resumen_tabla.add_section()
     resumen_tabla.add_row(
         "[bold]TOTAL[/bold]",
@@ -548,6 +604,7 @@ def _view_por_purchase_unificado(conn, tasa_dap, max_cuotas, premium):
             colored(tir_c, pct_str),
             colored(tir_d, pct_str),
         )
+    prop_table.add_row(*[""] * 11)
     prop_table.add_section()
     prop_table.add_row(
         "[bold]TOTAL[/bold]", "",
