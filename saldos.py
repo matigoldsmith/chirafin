@@ -9235,16 +9235,27 @@ def run_scraping(selected, full_update=False):
 
         resultados = []
         failed = []
+        saved_keys = set()   # bank_keys ya guardados en DB — evita re-guardar al final
+
+        def _save_new(bank_key, prev_len):
+            """Guarda solo los resultados nuevos del scraper bank_key (slice desde prev_len)."""
+            new_items = [r for r in resultados[prev_len:] if r["bank_key"] == bank_key]
+            if new_items:
+                save_to_db(new_items)
+                saved_keys.add(bank_key)
 
         try:
             for name, key, func, _ in execution_order:
                 print(f"\nConsultando {name}...", flush=True)
+                prev_len = len(resultados)
                 try:
                     ok = func(context, resultados)
                 except Exception as e_scraper:
                     print(f"  [ERROR] {name} lanzó excepción: {e_scraper}", flush=True)
                     ok = False
-                if not ok:
+                if ok:
+                    _save_new(key, prev_len)   # ← guardar inmediatamente
+                else:
                     failed.append((name, key, func, _))
 
             # Auto-reintento único (si falló en headless, reintenta con ventana visible)
@@ -9276,13 +9287,17 @@ def run_scraping(selected, full_update=False):
                 for name, key, func, items in failed:
                     # Limpiar items del banco para evitar duplicados en retry parcial
                     resultados = [r for r in resultados if r["bank_key"] != key]
+                    saved_keys.discard(key)   # ya no está guardado (lo limpiamos)
                     print(f"\nReintentando {name}...", flush=True)
+                    prev_len = len(resultados)
                     try:
                         ok = func(context, resultados)
                     except Exception as e_retry:
                         print(f"  [ERROR] {name} falló en reintento: {e_retry}", flush=True)
                         ok = False
-                    if not ok:
+                    if ok:
+                        _save_new(key, prev_len)   # ← guardar inmediatamente en retry
+                    else:
                         still_failed.append((name, key, func, items))
                 failed = still_failed
 
@@ -9302,14 +9317,24 @@ def run_scraping(selected, full_update=False):
                         continue
                     bname, bfunc, _ = key_to_entry[bkey]
                     resultados = [r for r in resultados if r["bank_key"] != bkey]
+                    saved_keys.discard(bkey)
                     print(f"\nReintentando {bname} (componente)...", flush=True)
+                    prev_len = len(resultados)
                     try:
                         bfunc(context, resultados)
+                        _save_new(bkey, prev_len)   # ← guardar componente reintentado
                     except Exception as e_comp:
                         print(f"  [ERROR] {bname} componente retry: {e_comp}", flush=True)
 
             # ── BTG workaround de precio (si aún hay ítems BTG fallidos) ───────
             _apply_btg_price_workaround(resultados)
+            # Guardar BTG si fue corregido por workaround y no está ya guardado
+            for bkey in ("btg", "btg_pj"):
+                if bkey not in saved_keys:
+                    new_btg = [r for r in resultados if r["bank_key"] == bkey]
+                    if new_btg:
+                        save_to_db(new_btg)
+                        saved_keys.add(bkey)
 
         finally:
             # SIEMPRE cerrar browser/context, incluso si hubo excepción
@@ -9325,8 +9350,10 @@ def run_scraping(selected, full_update=False):
     # ── TIR Semi-automáticos — corren DESPUÉS del browser ──────────────────
     if tir_selected:
         for name, key, func, _ in tir_selected:
+            prev_len = len(resultados)
             try:
                 func(None, resultados)
+                _save_new(key, prev_len)   # ← guardar TIR inmediatamente
             except Exception as e_tir:
                 print(f"  [ERROR] TIR {name}: {e_tir}", flush=True)
 
@@ -9346,7 +9373,11 @@ def run_scraping(selected, full_update=False):
             _reset_terminal()  # Refuerzo antes de questionary interactivo
             prompt_failed_items(still_errors, resultados)
 
-    save_to_db(resultados)
+    # Guardar solo lo que no fue guardado aún (entradas manuales de prompt_failed_items,
+    # items de bancos que fallaron ambos intentos, etc.)
+    unsaved = [r for r in resultados if r["bank_key"] not in saved_keys]
+    if unsaved:
+        save_to_db(unsaved)
     save_execution_log(resultados)
 
     # ACTUALIZAR ITEMS SEMIAUTOMÁTICOS: Mantener acciones, buscar precio automático
