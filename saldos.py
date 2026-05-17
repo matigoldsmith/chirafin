@@ -11699,18 +11699,19 @@ def main():
         _reset_terminal()
         _clear_terminal_buffer()
 
-        _frac_choice = questionary.Choice("  Fraccional", value="fraccional") if _FRACCIONAL_AVAILABLE else None
         _top_choices = [
             questionary.Choice("  Actualizar datos",       value="actualizar"),
             questionary.Choice("  Visualizar patrimonio",  value="visualizar"),
             questionary.Choice("  Analizar caja",          value="caja"),
             questionary.Choice("  Comparar fechas",        value="comparar"),
-            questionary.Choice("  Configuración",           value="config"),
         ]
-        if _frac_choice:
-            _top_choices.append(questionary.Separator())
-            _top_choices.append(_frac_choice)
-        _top_choices += [questionary.Separator(), questionary.Choice("  Salir", value="salir")]
+        if _FRACCIONAL_AVAILABLE:
+            _top_choices.append(questionary.Choice("  Fraccional", value="fraccional"))
+        _top_choices += [
+            questionary.Choice("  Configuración",           value="config"),
+            questionary.Separator(),
+            questionary.Choice("  Salir",                  value="salir"),
+        ]
 
         top_sel = questionary.select(
             "",
