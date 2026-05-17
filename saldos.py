@@ -45,10 +45,14 @@ try:
         menu_actualizar  as _frac_menu_actualizar,
         menu_analizar    as _frac_menu_analizar,
         menu_parametros  as _frac_menu_parametros,
-        menu_cuotas      as _frac_menu_cuotas,
     )
+    _frac_menu_cuotas = None
+    try:
+        from fraccional import menu_cuotas as _frac_menu_cuotas
+    except ImportError:
+        pass
     _FRACCIONAL_AVAILABLE = True
-except ImportError:
+except Exception:
     _FRACCIONAL_AVAILABLE = False
 
 _console = Console()
@@ -11814,20 +11818,23 @@ def main():
         # ── FRACCIONAL ──────────────────────────────────────────────────────
         elif top_sel == "fraccional" and _FRACCIONAL_AVAILABLE:
             while True:
-                sub = _print_table_menu("FRACCIONAL", [
+                _frac_opts = [
                     "  Actualizar datos",
                     "  Analizar datos",
-                    "  Configurar cuotas",
-                    "  Definir parámetros",
-                    "  « Volver",
-                ])
+                ]
+                if _frac_menu_cuotas:
+                    _frac_opts.append("  Configurar cuotas")
+                _frac_opts += ["  Definir parámetros", "  « Volver"]
+                sub = _print_table_menu("FRACCIONAL", _frac_opts)
+                _frac_cuotas_idx = 3 if _frac_menu_cuotas else None
+                _frac_params_idx = 4 if _frac_menu_cuotas else 3
                 if sub == 1:
                     _frac_menu_actualizar()
                 elif sub == 2:
                     _frac_menu_analizar()
-                elif sub == 3:
+                elif _frac_cuotas_idx and sub == _frac_cuotas_idx:
                     _frac_menu_cuotas()
-                elif sub == 4:
+                elif sub == _frac_params_idx:
                     _frac_menu_parametros()
                 else:
                     break
