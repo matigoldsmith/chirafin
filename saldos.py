@@ -45,7 +45,7 @@ from collections import defaultdict as _frac_defaultdict
 _FRAC_DB_PATH        = Path(__file__).parent / "fraccional.db"
 _FRAC_TABLE          = "fraccional_movimientos"
 _FRAC_KIND_COMPRA    = ("purchase", "market")
-_FRAC_DEFAULT_PARAMS = {"tasa_dap": 0.05, "premium": 0.20, "max_meses": 12.0}
+_FRAC_DEFAULT_PARAMS = {"tasa_dap": 0.05, "premium": 0.20, "max_meses": 12.0, "espera_max": 18.0}
 
 # ─── DB / params ────────────────────────────────────────────────────────────
 def _frac_init_params_table(conn):
@@ -299,7 +299,7 @@ def _frac_find_min_cuotas_proj(val_actual, commission_rate, tir_b_pct, umbral, m
     return None, None
 
 # ─── Acción por propiedad ─────────────────────────────────────────────────────
-def _frac_accion_propiedad(prop, tasa_dap, umbral, commission_rate, max_meses, today):
+def _frac_accion_propiedad(prop, tasa_dap, umbral, commission_rate, max_meses, today, espera_max=18):
     """Devuelve (texto, color) con la recomendación a nivel propiedad."""
     dias_prom = prop.get("dias_prom", 0)
     val       = prop["val"]
@@ -319,21 +319,24 @@ def _frac_accion_propiedad(prop, tasa_dap, umbral, commission_rate, max_meses, t
         return "Vender mal activo", "red"
     if td_d is not None and td_d < tasa_dap:
         return "Vender mal activo", "red"
+    if ta_d is None and tb_d is None and td_d is None:
+        return "Esperar", "dim"  # sin datos suficientes → conservador
+    # Hold check PRIMERO: si ya necesita más de espera_max meses → Vender rent. baja
+    # (no tiene sentido ofrecer "Comprar" si la propiedad existente no rinde en plazo razonable)
+    hold_m = _frac_calcular_hold_propiedad(flujos_b, val, tb, umbral, max_months=int(espera_max))
+    if hold_m is None:
+        return "Vender rent. baja", "dark_orange3"
     if ta_d is not None and ta_d > umbral:
         return "Comprar", "green"
     min_c, _ = _frac_find_min_cuotas_proj(val, commission_rate, tb, umbral, max_meses, today)
     if min_c is not None:
         return f"Comprar apal. ({min_c})", "yellow"
-    hold_m = _frac_calcular_hold_propiedad(flujos_b, val, tb, umbral)
     if hold_m == 0:
         return "Mantener ✓", "orange1"
-    elif hold_m is not None:
-        return f"Mantener {hold_m}m", "orange1"
-    else:
-        return "Vender rent. baja", "dark_orange3"  # plazo excesivo, no activo malo
+    return f"Mantener {hold_m}m", "orange1"
 
 # ─── Cómputo central ─────────────────────────────────────────────────────────
-def _frac_compute_analysis(conn, tasa_dap, premium, max_meses):
+def _frac_compute_analysis(conn, tasa_dap, premium, max_meses, espera_max=18):
     compras = conn.execute(f"""
         WITH latest AS (
             SELECT purchase_confirmation_id, persona, MAX(extracted_at) AS max_ts
@@ -470,8 +473,12 @@ def _frac_compute_analysis(conn, tasa_dap, premium, max_meses):
                 grupo = "mantener"
             if grupo == "mantener":
                 meses_restantes = _frac_calcular_meses_restantes_hold(
-                    inv_inicial, valor_actual, fecha_dt, tir_b, umbral
+                    inv_inicial, valor_actual, fecha_dt, tir_b, umbral,
+                    max_months=int(espera_max),
                 )
+                # Reclasificar: si necesita más de espera_max meses → vender rent. baja
+                if meses_restantes is None:
+                    grupo = "vender_bajo_dap"
 
         _cash_base = cash_invertido if (cash_invertido is not None and cash_invertido > 0) else (inv_inicial or None)
         rent_pct   = (ganancia / _cash_base * 100) if (ganancia is not None and _cash_base) else None
@@ -571,7 +578,7 @@ def _frac_compute_analysis(conn, tasa_dap, premium, max_meses):
         "grupos": grupos,
         "totales_por_tipo": totales_por_tipo,
         "totales_por_propiedad": totales_por_propiedad,
-        "umbral": umbral, "tasa_dap": tasa_dap, "max_meses": max_meses,
+        "umbral": umbral, "tasa_dap": tasa_dap, "max_meses": max_meses, "espera_max": espera_max,
         "commission_rate": commission_rate, "premium": premium,
         "inv_total": inv_total, "val_total": val_total,
         "cash_inv_total": cash_inv_total,
@@ -737,12 +744,13 @@ def _frac_show_comprar(data):
         t.add_column("Cuotas\npromedio",     justify="right", style="dim", width=11)
         t.add_column("Inversión\nnominal",   justify="right", style="cyan",  width=11)
         t.add_column("Valor\nactual",        justify="right", style="green", width=11)
+        t.add_column("Cash\ninvertido",      justify="right", style="yellow", width=11)
         t.add_column("Ganancia\nsobre cash", justify="right", width=12)
         t.add_column("Rentabilidad\n% cash", justify="right", width=12)
         t.add_column("TIR A",                justify="right", width=7)
         t.add_column("TIR B",                justify="right", width=7)
-        t.add_column("Mín.\ncuotas",         justify="right", style="yellow", width=8)
         t.add_column("TIR C*",               justify="right", width=8)
+        t.add_column("Mín.\ncuotas",         justify="right", style="yellow", width=8)
         return t
 
     def _fill_solo_apal(t, entries):
@@ -751,10 +759,11 @@ def _frac_show_comprar(data):
                 p["name"], p["uid"], str(p["n"]), f"{p['dias']/30:.1f}",
                 f"{p['cuotas_prom']:.1f}",
                 _frac_fmtnum(p["inv"]), _frac_fmtnum(p["val"]),
+                _frac_fmtnum(p.get("cash_inv")),
                 _frac_colored(p["gan"], signed=True), _frac_colored(p["rent"], _frac_pct_str),
                 _frac_colored(p["ta"], _frac_pct_str), _frac_colored(p["tb"], _frac_pct_str),
-                f"[yellow]{p['min_cuotas']}[/yellow]" if p.get("min_cuotas") else "—",
                 _frac_colored(p.get("tc_min"), _frac_pct_str),
+                f"[yellow]{p['min_cuotas']}[/yellow]" if p.get("min_cuotas") else "—",
             )
 
     if not sin_apal and not solo_apal:
@@ -796,15 +805,19 @@ def _frac_show_comprar(data):
         _console.print("[dim]TIR A = contado + comisión · TIR B = contado sin comisión · TIR C = cuotas + comisión · TIR D = cuotas sin comisión[/dim]")
         t = _make_tabla_solo_apal()
         _fill_solo_apal(t, solo_apal)
-        # total row: cols=13, inv@5, val@6, gan@7, rent@8 (no cash_inv col)
-        inv_t  = sum(p["inv"] for p in solo_apal)
-        val_t  = sum(p["val"] for p in solo_apal)
-        gan_t  = sum(p["gan"] for p in solo_apal if p["gan"] is not None)
-        t.add_row(*[""] * 13); t.add_section()
+        # total row: 14 cols — inv@5, val@6, cash@7, gan@8, rent@9, tira@10, tirb@11, tirc*@12, min_c@13
+        inv_t  = sum(p["inv"]  for p in solo_apal)
+        val_t  = sum(p["val"]  for p in solo_apal)
+        cash_t = sum(p.get("cash_inv", 0) for p in solo_apal)
+        gan_t  = sum(p["gan"]  for p in solo_apal if p["gan"] is not None)
+        rent_t = (gan_t / cash_t * 100) if cash_t > 0 else None
+        t.add_row(*[""] * 14); t.add_section()
         t.add_row("", "", "", "", "",
             f"[bold cyan]{_frac_fmtnum(inv_t)}[/bold cyan]",
             f"[bold green]{_frac_fmtnum(val_t)}[/bold green]",
-            _frac_colored(gan_t, signed=True), "", "", "", "", "")
+            f"[bold yellow]{_frac_fmtnum(cash_t)}[/bold yellow]",
+            _frac_colored(gan_t, signed=True), _frac_colored(rent_t, _frac_pct_str),
+            "", "", "", "")
         _console.print(t)
 
 def _frac_show_vender(data):
@@ -918,7 +931,8 @@ def _frac_show_por_propiedad(data):
     tasa_dap       = data["tasa_dap"]
     umbral         = data["umbral"]
     commission_rate= data["commission_rate"]
-    max_meses     = data["max_meses"]
+    max_meses      = data["max_meses"]
+    espera_max     = data.get("espera_max", 18)
     today          = datetime.date.today()
     _console.print("\n[bold orange1]Por propiedad  (PN + PJ)[/bold orange1]\n")
     t = Table(box=rich_box.SIMPLE_HEAVY, show_header=True, header_style="bold orange1")
@@ -949,7 +963,7 @@ def _frac_show_por_propiedad(data):
         _base_p  = cash_p if cash_p > 0 else (inv or None)
         rent     = (gan / _base_p * 100) if _base_p else None
         accion_txt, accion_color = _frac_accion_propiedad(
-            d, tasa_dap, umbral, commission_rate, max_meses, today
+            d, tasa_dap, umbral, commission_rate, max_meses, today, espera_max=espera_max
         )
         t.add_row(
             d["name"], uid, str(d.get("n", 0)),
@@ -980,16 +994,19 @@ def _frac_show_por_propiedad(data):
         _frac_colored(data["tir_d_total"], _frac_pct_str),
     )
     _console.print(t)
-    _console.print(
-        "  [green]Comprar[/green]             TIR A > umbral — rinde bien al contado\n"
-        "  [yellow]Comprar apal. (X)[/yellow]  solo apalancado — X = mín. cuotas para superar umbral con TIR C\n"
-        "  [orange1]Mantener Xm[/orange1]       esperar X meses más para superar umbral (proyección TIR B)\n"
-        "  [orange1]Mantener ✓[/orange1]        ya supera umbral hoy\n"
-        "  [red]Vender mal activo[/red]   TIR B < 0 (destruye valor) o TIR D < DAP\n"
-        "  [dark_orange3]Vender rent. baja[/dark_orange3]   activo no malo, pero superar umbral tomaría más de 18 meses\n"
-        "  [dim]Esperar[/dim]             promedio < 90 días — muy temprano para evaluar\n"
-        f"  [dim]Umbral = DAP {tasa_dap*100:.1f}% + premium {data['premium']*100:.0f}% = {umbral*100:.2f}%[/dim]"
-    )
+    _leyenda = Table(box=None, show_header=False, padding=(0, 2, 0, 2))
+    _leyenda.add_column("accion", no_wrap=True, min_width=20)
+    _leyenda.add_column("desc",   style="dim")
+    _leyenda.add_row("[green]Comprar[/green]",             "TIR A > umbral — rinde bien al contado")
+    _leyenda.add_row("[yellow]Comprar apal. (X)[/yellow]", "solo apalancado — X = mín. cuotas para superar umbral con TIR C")
+    _leyenda.add_row("[orange1]Mantener Xm[/orange1]",     "esperar X meses más para superar umbral (proyección TIR B)")
+    _leyenda.add_row("[orange1]Mantener ✓[/orange1]",      "ya supera umbral hoy")
+    _leyenda.add_row("[red]Vender mal activo[/red]",       "TIR B < 0 (destruye valor) o TIR D < DAP")
+    _leyenda.add_row("[dark_orange3]Vender rent. baja[/dark_orange3]",
+                     f"activo no malo, pero superar umbral tomaría más de [cyan]{int(data.get('espera_max',18))}[/cyan] meses")
+    _leyenda.add_row("[dim]Esperar[/dim]",                 "promedio < 90 días — muy temprano para evaluar")
+    _leyenda.add_row(f"[dim]Umbral = DAP {tasa_dap*100:.1f}% + premium {data['premium']*100:.0f}% = {umbral*100:.2f}%[/dim]", "")
+    _console.print(_leyenda)
 
 # ─── Vista: todas las compras ordenadas de mejor a peor ──────────────────────
 def _frac_show_todas_compras(data):
@@ -1082,18 +1099,21 @@ def _frac_show_todas_compras(data):
         "", "", "", "",
     )
     _console.print(t)
-    _console.print(
-        f"  [orange1]Mantener[/orange1]  todo lo que no es vender ni esperar  ·  "
-        f"Hold = meses adicionales para superar umbral ({umbral*100:.2f}%)  ·  ✓ = ya lo supera\n"
-        f"  [red]Vender mal activo[/red]  TIR B < 0 o TIR D < DAP  ·  "
-        f"[dark_orange3]Vender rent. baja[/dark_orange3]  activo no malo pero recupero > 18 meses"
-    )
+    _ley2 = Table(box=None, show_header=False, padding=(0, 2, 0, 2))
+    _ley2.add_column("accion", no_wrap=True, min_width=20)
+    _ley2.add_column("desc",   style="dim")
+    _ley2.add_row("[orange1]Mantener[/orange1]",
+                  f"Hold = meses adicionales para superar umbral ({umbral*100:.2f}%)  ·  ✓ = ya lo supera")
+    _ley2.add_row("[red]Vender mal activo[/red]",        "TIR B < 0 o TIR D < DAP")
+    _ley2.add_row("[dark_orange3]Vender rent. baja[/dark_orange3]",
+                  f"activo no malo pero hold > {int(data.get('espera_max', 18))} meses")
+    _console.print(_ley2)
 
 # ─── Menú de análisis ────────────────────────────────────────────────────────
-def _frac_menu_analisis(tasa_dap, premium, max_meses=12):
+def _frac_menu_analisis(tasa_dap, premium, max_meses=12, espera_max=18):
     conn = _frac_db_conn()
     _console.print("\n[dim]Calculando...[/dim]")
-    data = _frac_compute_analysis(conn, tasa_dap, premium, max_meses)
+    data = _frac_compute_analysis(conn, tasa_dap, premium, max_meses, espera_max=int(espera_max))
     conn.close()
     if data is None:
         _console.print("[yellow]Sin datos. Actualizá datos primero.[/yellow]")
@@ -1108,7 +1128,7 @@ def _frac_menu_analisis(tasa_dap, premium, max_meses=12):
     n_esperar      = len(grupos["esperar"])
     n_props        = len(data["totales_por_propiedad"])
     params_line = (f"DAP {tasa_dap*100:.1f}%  ·  premium {premium*100:.0f}%  ·  "
-                   f"umbral {umbral*100:.2f}%")
+                   f"umbral {umbral*100:.2f}%  ·  cuotas máx {int(max_meses)}m  ·  hold máx {int(espera_max)}m")
     while True:
         _console.print(f"\n[dim]{params_line}[/dim]")
         _console.print("[bold orange1]  ANÁLISIS FRACCIONAL[/bold orange1]")
@@ -1208,6 +1228,7 @@ def _frac_menu_analizar():
             tasa_dap=params["tasa_dap"],
             premium=params["premium"],
             max_meses=int(params["max_meses"]),
+            espera_max=int(params["espera_max"]),
         )
     except Exception as e:
         _console.print(f"[bold red]Error en análisis: {e}[/bold red]")
@@ -1219,16 +1240,18 @@ def _frac_menu_parametros():
         params = _frac_get_params()
         umbral = params["tasa_dap"] * (1 + params["premium"])
         _console.print(f"\n  [bold]Parámetros actuales[/bold]")
-        _console.print(f"  Tasa DAP   : [cyan]{params['tasa_dap']*100:.1f}%[/cyan]")
-        _console.print(f"  Premium    : [cyan]{params['premium']*100:.0f}%[/cyan]")
-        _console.print(f"  Umbral     : [cyan]{umbral*100:.2f}%[/cyan]  [dim](= DAP × (1 + premium))[/dim]")
-        _console.print(f"  Meses salida: [cyan]{int(params['max_meses'])}[/cyan]\n")
+        _console.print(f"  Tasa DAP     : [cyan]{params['tasa_dap']*100:.1f}%[/cyan]")
+        _console.print(f"  Premium      : [cyan]{params['premium']*100:.0f}%[/cyan]")
+        _console.print(f"  Umbral       : [cyan]{umbral*100:.2f}%[/cyan]  [dim](= DAP × (1 + premium))[/dim]")
+        _console.print(f"  Cuotas máx.  : [cyan]{int(params['max_meses'])}m[/cyan]  [dim](horizonte de meses para evaluar compra apalancada)[/dim]")
+        _console.print(f"  Hold máximo  : [cyan]{int(params['espera_max'])}m[/cyan]  [dim](meses máx. antes de preferir vender sobre esperar)[/dim]\n")
         sel = questionary.select(
             "",
             choices=[
                 questionary.Choice("  Cambiar tasa DAP",   value="dap"),
                 questionary.Choice("  Cambiar premium",    value="premium"),
-                questionary.Choice("  Cambiar max cuotas", value="cuotas"),
+                questionary.Choice("  Cambiar cuotas máx.",  value="cuotas"),
+                questionary.Choice("  Cambiar hold máximo",  value="espera"),
                 questionary.Separator(),
                 questionary.Choice("  « Volver",           value="back"),
             ],
@@ -1262,7 +1285,7 @@ def _frac_menu_parametros():
                     _console.print("  [red]Valor inválido[/red]")
         elif sel == "cuotas":
             raw = questionary.text(
-                f"  Nuevo máximo de meses para salida (actual {int(params['max_meses'])}) — ej: 12:",
+                f"  Cuotas máx. — horizonte para compra apalancada (actual {int(params['max_meses'])}m) — ej: 12:",
                 style=QUESTIONARY_STYLE,
             ).ask()
             if raw:
@@ -1272,6 +1295,20 @@ def _frac_menu_parametros():
                         raise ValueError
                     _frac_set_param("max_meses", float(v))
                     _console.print(f"  [green]✓ max_meses → {v}[/green]")
+                except ValueError:
+                    _console.print("  [red]Valor inválido (debe ser entero >= 1)[/red]")
+        elif sel == "espera":
+            raw = questionary.text(
+                f"  Hold máximo — meses máx. antes de vender sobre esperar (actual {int(params['espera_max'])}m) — ej: 18:",
+                style=QUESTIONARY_STYLE,
+            ).ask()
+            if raw:
+                try:
+                    v = int(raw.strip())
+                    if v < 1:
+                        raise ValueError
+                    _frac_set_param("espera_max", float(v))
+                    _console.print(f"  [green]✓ espera_max → {v}m[/green]")
                 except ValueError:
                     _console.print("  [red]Valor inválido (debe ser entero >= 1)[/red]")
 
