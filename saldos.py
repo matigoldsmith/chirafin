@@ -12947,6 +12947,9 @@ def main():
         return
 
     if args.targets:
+        def _shortcut_actualizar():
+            bw_unlock()
+            run_scraping(list(INSTITUTION_ITEMS), full_update=True)
         _SHORTCUTS = {
             "fr":          lambda: _frac_menu_analizar(),
             "fraccional":  lambda: _frac_menu_analizar(),
@@ -12954,6 +12957,8 @@ def main():
             "p":           lambda: show_last_saldos(by_category=True, pause=True),
             "tabla":       lambda: show_last_saldos(pause=True, hide_zeros=True),
             "t":           lambda: show_last_saldos(pause=True, hide_zeros=True),
+            "actualizar":  _shortcut_actualizar,
+            "a":           _shortcut_actualizar,
         }
         shortcut = args.targets[0].lower() if args.targets else None
         if shortcut in _SHORTCUTS:
@@ -12967,7 +12972,7 @@ def main():
             run_scraping(selected)
             return
         else:
-            _console.print(f"[bold red][ERROR] No es válido: '{args.targets[0]}'. Shortcuts: fr, fraccional, patrimonio, p, tabla, t[/bold red]")
+            _console.print(f"[bold red][ERROR] No es válido: '{args.targets[0]}'. Shortcuts: fr, p, t, a (fraccional, patrimonio, tabla, actualizar)[/bold red]")
             sys.exit(1)
 
     try:
