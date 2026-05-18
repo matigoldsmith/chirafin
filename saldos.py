@@ -12947,6 +12947,19 @@ def main():
         return
 
     if args.targets:
+        _SHORTCUTS = {
+            "fr":          lambda: _frac_menu_analizar(),
+            "fraccional":  lambda: _frac_menu_analizar(),
+            "patrimonio":  lambda: show_last_saldos(by_category=True, pause=True),
+            "p":           lambda: show_last_saldos(by_category=True, pause=True),
+            "tabla":       lambda: show_last_saldos(pause=True, hide_zeros=True),
+            "t":           lambda: show_last_saldos(pause=True, hide_zeros=True),
+        }
+        shortcut = args.targets[0].lower() if args.targets else None
+        if shortcut in _SHORTCUTS:
+            _SHORTCUTS[shortcut]()
+            return
+
         valid_keys = [item[1] for item in INSTITUTION_ITEMS]
         selected = [item for item in INSTITUTION_ITEMS if item[1] in args.targets]
         if selected:
@@ -12954,7 +12967,7 @@ def main():
             run_scraping(selected)
             return
         else:
-            _console.print(f"[bold red][ERROR] No es válido.[/bold red]")
+            _console.print(f"[bold red][ERROR] No es válido: '{args.targets[0]}'. Shortcuts: fr, fraccional, patrimonio, p, tabla, t[/bold red]")
             sys.exit(1)
 
     try:
