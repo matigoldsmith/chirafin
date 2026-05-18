@@ -13079,6 +13079,17 @@ def main():
 
         # ── CONFIGURACIÓN ───────────────────────────────────────────────────
         elif top_sel == "config":
+            _shortcuts_table = Table(box=None, show_header=False, padding=(0, 2, 0, 2))
+            _shortcuts_table.add_column("cmd",  style="cyan", no_wrap=True, min_width=14)
+            _shortcuts_table.add_column("desc", style="dim")
+            _shortcuts_table.add_row("chirafin",    "menú principal")
+            _shortcuts_table.add_row("fraccional / fr", "análisis Fraccional")
+            _shortcuts_table.add_row("patrimonio / p",  "resumen por categoría")
+            _shortcuts_table.add_row("tabla / t",       "tabla completa")
+            _shortcuts_table.add_row("actualizar / a",  "correr todos los scrapers")
+            _console.print("\n[bold]Shortcuts de terminal[/bold]")
+            _console.print(_shortcuts_table)
+
             cfg_opts = [
                 "  Gestión de scrapers",
                 "  Sincronizar Bitwarden",
