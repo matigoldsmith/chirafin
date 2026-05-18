@@ -43,7 +43,30 @@ Al mostrar cualquier resumen o visualización de patrimonio, SIEMPRE usar las ca
 
 ---
 
-## STATUS ACTUAL (14 May 2026) ✅ FUNCIONANDO
+## STATUS ACTUAL (18 May 2026) ✅ FUNCIONANDO
+
+**Cambios críticos 18 May 2026 — Fraccional análisis:**
+
+1. **Bug `_frac_atribuir_movements` — movements 4x inflados:** La función no filtraba por `MAX(extracted_at)`, sumando current_value de TODAS las extracciones (4 en este caso). Fix: agrega `WITH latest AS (SELECT MAX(extracted_at))` + `JOIN latest` para usar solo la extracción más reciente. Impacto: error de valor_actual bajó de ~4% a ~0.2% vs chirafin. Backup: `backups/saldos_20260518_fraccional_totals_menu_fix.py`.
+
+2. **Totalizadores en todas las tablas Fraccional:** Nueva función `_frac_add_total_purchase(t, filas, show_hold)` + filas TOTAL con inv/val/cash/gan en cada tabla: Vender, Esperar, Mantener, Todas las compras, Comprar (sin apal), Comprar apalancado. Las tablas Portafolio y Por propiedad ya tenían TOTAL.
+
+3. **Menú Recomendaciones — opciones separadas:**
+   - Comprar (sin apal) + Comprar apalancado → entradas separadas con conteos propios
+   - Vender mal activo + Vender rent. baja → entradas separadas
+   - Alineación con `:<22` para columna consistente
+
+4. **Hold "n/a" para Vender mal activo:** En "Todas las compras", activos en grupo vender_malo/vender_bajo_dap muestran "n/a" en columna Hold (no ">18m" — nunca van a superar el umbral).
+
+5. **`max_cuotas` renombrado a `max_meses`:** El parámetro es el horizonte de salida (meses), no solo máximo de cuotas. Actualizado en código + display ("Meses salida" / "Nuevo máximo de meses para salida").
+
+6. **Sentence case en títulos:** Todos los `[bold]COMPRAR[/bold]`, `[bold]ESPERAR[/bold]`, `[bold]MANTENER[/bold]` → `Comprar`, `Esperar`, `Mantener`. También "ESPERAR"/"dim" en `_frac_accion_propiedad`.
+
+7. **Sanity check valor_actual:** Fraccional DB (con fix) vs Chirafin Supabase: PN diff=0.19%, PJ diff=0.22% — diferencia atribuible a timing de extracción.
+
+---
+
+## STATUS ANTERIOR (14 May 2026) ✅ FUNCIONANDO
 
 **Cambios críticos 14 May 2026 — sesión tarde:**
 

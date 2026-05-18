@@ -39,21 +39,1244 @@ import email as _email_lib
 import email.utils as _email_utils
 from rich import print as rprint
 
-# ── Fraccional (módulo separado) ────────────────────────────────────────────
-try:
-    from fraccional import (
-        menu_actualizar  as _frac_menu_actualizar,
-        menu_analizar    as _frac_menu_analizar,
-        menu_parametros  as _frac_menu_parametros,
-    )
-    _frac_menu_cuotas = None
+# ── Fraccional (inline) ─────────────────────────────────────────────────────
+from collections import defaultdict as _frac_defaultdict
+
+_FRAC_DB_PATH        = Path(__file__).parent / "fraccional.db"
+_FRAC_TABLE          = "fraccional_movimientos"
+_FRAC_KIND_COMPRA    = ("purchase", "market")
+_FRAC_DEFAULT_PARAMS = {"tasa_dap": 0.05, "premium": 0.20, "max_meses": 12.0}
+
+# ─── DB / params ────────────────────────────────────────────────────────────
+def _frac_init_params_table(conn):
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS fraccional_params (
+            key   TEXT PRIMARY KEY,
+            value REAL NOT NULL
+        )
+    """)
+    conn.commit()
+
+def _frac_get_params():
+    params = dict(_FRAC_DEFAULT_PARAMS)
+    if not _FRAC_DB_PATH.exists():
+        return params
+    conn = sqlite3.connect(str(_FRAC_DB_PATH))
+    _frac_init_params_table(conn)
+    for k, v in conn.execute("SELECT key, value FROM fraccional_params").fetchall():
+        if k in params:
+            params[k] = v
+    conn.close()
+    return params
+
+def _frac_set_param(key, value):
+    conn = sqlite3.connect(str(_FRAC_DB_PATH))
+    _frac_init_params_table(conn)
+    conn.execute("INSERT OR REPLACE INTO fraccional_params (key, value) VALUES (?, ?)", (key, value))
+    conn.commit()
+    conn.close()
+
+def _frac_get_ultima_extraccion():
+    if not _FRAC_DB_PATH.exists():
+        return None
     try:
-        from fraccional import menu_cuotas as _frac_menu_cuotas
-    except ImportError:
+        conn = sqlite3.connect(str(_FRAC_DB_PATH))
+        row = conn.execute("SELECT MAX(extracted_at) FROM fraccional_movimientos").fetchone()
+        conn.close()
+        if row and row[0]:
+            dt = datetime.datetime.fromisoformat(row[0])
+            dt_local = dt.astimezone()
+            _M = ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"]
+            return f"{dt_local.day:02d} {_M[dt_local.month-1]} {dt_local.year}, {dt_local.strftime('%H:%M')}"
+    except Exception:
         pass
-    _FRACCIONAL_AVAILABLE = True
-except Exception:
-    _FRACCIONAL_AVAILABLE = False
+    return None
+
+def _frac_db_conn():
+    if not _FRAC_DB_PATH.exists():
+        _console.print("[red]No existe fraccional.db. Actualizá datos primero.[/red]")
+        raise SystemExit(1)
+    conn = sqlite3.connect(str(_FRAC_DB_PATH))
+    conn.row_factory = sqlite3.Row
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS fraccional_config (
+            purchase_confirmation_id TEXT NOT NULL,
+            persona                  TEXT NOT NULL,
+            num_cuotas               INTEGER NOT NULL DEFAULT 6,
+            PRIMARY KEY (purchase_confirmation_id, persona)
+        )
+    """)
+    conn.commit()
+    return conn
+
+def _frac_get_num_cuotas(conn, pid, persona):
+    row = conn.execute(
+        "SELECT num_cuotas FROM fraccional_config WHERE purchase_confirmation_id=? AND persona=?",
+        (pid, persona)
+    ).fetchone()
+    return row["num_cuotas"] if row else 6
+
+# ─── Formateo ────────────────────────────────────────────────────────────────
+def _frac_fmtnum(v, signed=False):
+    if v is None:
+        return "—"
+    sign = "+" if signed and v > 0 else ("-" if v < 0 else "")
+    return sign + f"{abs(v):,.0f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+def _frac_colored(v, fmt_fn=None, signed=False):
+    if v is None:
+        return "[dim]—[/dim]"
+    s = fmt_fn(v) if fmt_fn else _frac_fmtnum(v, signed=signed)
+    c = "green" if v >= 0 else "red"
+    return f"[{c}]{s}[/{c}]"
+
+_frac_pct_str = lambda v: f"{v:+.0f}%" if abs(v) >= 100 else f"{v:+.1f}%"
+
+# ─── XIRR (Newton-Raphson) ───────────────────────────────────────────────────
+def _frac_xirr(cashflows, dates):
+    if len(cashflows) < 2:
+        return None
+    d0 = dates[0]
+    years = [(d - d0).days / 365.0 for d in dates]
+    def npv(r):
+        try:
+            return sum(cf / (1 + r) ** t for cf, t in zip(cashflows, years))
+        except Exception:
+            return float("inf")
+    def dnpv(r):
+        try:
+            return sum(-t * cf / (1 + r) ** (t + 1) for cf, t in zip(cashflows, years))
+        except Exception:
+            return 0.0
+    def _try(guess):
+        r = guess
+        for _ in range(200):
+            try:
+                f, df = npv(r), dnpv(r)
+                if not isinstance(f, (int, float)) or not isinstance(df, (int, float)):
+                    return None
+                if abs(df) < 1e-14:
+                    break
+                r_new = r - f / df
+                if not isinstance(r_new, (int, float)) or r_new != r_new:
+                    return None
+                if abs(r_new - r) < 1e-9:
+                    return r_new if -0.9999 < r_new < 100 else None
+                r = r_new
+            except Exception:
+                return None
+        return None
+    for guess in (0.1, 0.5, -0.1, 2.0, 0.01):
+        result = _try(guess)
+        if result is not None:
+            return result
+    return None
+
+# ─── Atribución movements ─────────────────────────────────────────────────────
+def _frac_atribuir_movements(conn, unit_id, persona):
+    rows = conn.execute(f"""
+        WITH latest AS (
+            SELECT purchase_confirmation_id, persona, MAX(extracted_at) AS max_ts
+            FROM {_FRAC_TABLE}
+            WHERE unit_id=? AND persona=? AND status='active'
+            GROUP BY purchase_confirmation_id, persona
+        )
+        SELECT m.purchase_confirmation_id AS pid,
+               m.kind, m.confirmed_at,
+               MAX(m.bid_token_quantity)  AS fracciones,
+               SUM(m.original_investment) AS capital,
+               SUM(m.current_value)       AS valor
+        FROM {_FRAC_TABLE} m
+        JOIN latest l ON m.purchase_confirmation_id = l.purchase_confirmation_id
+                      AND m.persona = l.persona AND m.extracted_at = l.max_ts
+        WHERE m.unit_id=? AND m.persona=? AND m.status='active'
+        GROUP BY m.purchase_confirmation_id, m.kind, m.confirmed_at
+        ORDER BY m.confirmed_at
+    """, (unit_id, persona, unit_id, persona)).fetchall()
+    fracc_por_pid, atrib = {}, {}
+    for r in rows:
+        pid, kind = r["pid"], r["kind"]
+        fracc, cap, val = r["fracciones"] or 0, r["capital"] or 0, r["valor"] or 0
+        if kind in _FRAC_KIND_COMPRA:
+            fracc_por_pid[pid] = fracc_por_pid.get(pid, 0) + fracc
+            if pid not in atrib:
+                atrib[pid] = {"capital_mov": 0.0, "valor_mov": 0.0}
+        elif kind == "movement":
+            fracc_compras = {p: f for p, f in fracc_por_pid.items() if p in atrib}
+            total_f = sum(fracc_compras.values())
+            if total_f > 0:
+                for cpid, cf in fracc_compras.items():
+                    peso = cf / total_f
+                    atrib[cpid]["capital_mov"] += cap * peso
+                    atrib[cpid]["valor_mov"]   += val * peso
+            fracc_por_pid[pid] = fracc_por_pid.get(pid, 0) + fracc
+    return atrib
+
+# ─── Hold: meses adicionales para superar umbral ─────────────────────────────
+def _frac_calcular_meses_restantes_hold(inv_inicial, valor_actual, fecha_dt, tir_b_pct, umbral, max_months=18):
+    if tir_b_pct is None or inv_inicial <= 0 or valor_actual <= 0 or fecha_dt is None:
+        return None
+    tir_b = tir_b_pct / 100
+    hoy = datetime.date.today()
+    rate0 = _frac_xirr([-inv_inicial, valor_actual], [fecha_dt, hoy])
+    if rate0 is not None and rate0 > umbral:
+        return 0
+    for t in range(1, max_months + 1):
+        exit_date = hoy + datetime.timedelta(days=30 * t)
+        val_exit = valor_actual * (1 + tir_b) ** (t / 12)
+        rate = _frac_xirr([-inv_inicial, val_exit], [fecha_dt, exit_date])
+        if rate is not None and rate > umbral:
+            return t
+    return None
+
+# ─── Hold propiedad (multi-cashflow) ─────────────────────────────────────────
+def _frac_calcular_hold_propiedad(flujos_b, valor_actual, tir_b_pct, umbral, max_months=18):
+    """Hold a nivel propiedad usando todos los flujos históricos (multi-compra)."""
+    if not flujos_b or tir_b_pct is None or valor_actual <= 0:
+        return None
+    tir_b = tir_b_pct / 100
+    hoy = datetime.date.today()
+    outflows = [(d, v) for d, v in flujos_b if v < 0]
+    if not outflows:
+        return None
+    cfs0 = [v for _, v in outflows] + [valor_actual]
+    dts0 = [d for d, _ in outflows] + [hoy]
+    rate0 = _frac_xirr(cfs0, dts0)
+    if rate0 is not None and rate0 > umbral:
+        return 0
+    for t in range(1, max_months + 1):
+        exit_date = hoy + datetime.timedelta(days=30 * t)
+        val_exit  = valor_actual * (1 + tir_b) ** (t / 12)
+        cfs = [v for _, v in outflows] + [val_exit]
+        dts = [d for d, _ in outflows] + [exit_date]
+        rate = _frac_xirr(cfs, dts)
+        if rate is not None and rate > umbral:
+            return t
+    return None
+
+# ─── TIR de portafolio ────────────────────────────────────────────────────────
+def _frac_calcular_tir_portafolio(flujos_por_fecha):
+    if not flujos_por_fecha:
+        return None
+    by_date = _frac_defaultdict(float)
+    for fecha, flujo in flujos_por_fecha:
+        by_date[fecha] += flujo
+    sorted_dates = sorted(by_date)
+    cfs = [by_date[d] for d in sorted_dates]
+    rate = _frac_xirr(cfs, sorted_dates)
+    return rate * 100 if rate is not None else None
+
+# ─── Proyección compra nueva (forward-looking) ───────────────────────────────
+def _frac_proj_tir_c(val_actual, commission_rate, tir_b_pct, n_cuotas, t_meses, today):
+    if tir_b_pct is None or val_actual <= 0 or n_cuotas < 1:
+        return None
+    capital_total = val_actual * (1 + commission_rate)
+    cuota_m       = capital_total / n_cuotas
+    tir_b         = tir_b_pct / 100
+    val_exit      = val_actual * (1 + tir_b) ** (t_meses / 12)
+    n_pag_proj    = min(t_meses, n_cuotas)
+    deuda_rest    = (n_cuotas - n_pag_proj) * cuota_m
+    exit_neto     = val_exit - deuda_rest
+    if exit_neto <= 0:
+        return None
+    if n_pag_proj > 0:
+        cashflows = [-cuota_m] * n_pag_proj
+        dates     = [today + datetime.timedelta(days=30 * i) for i in range(1, n_pag_proj + 1)]
+    else:
+        cashflows = [-capital_total]
+        dates     = [today]
+    cashflows.append(exit_neto)
+    dates.append(today + datetime.timedelta(days=30 * t_meses))
+    rate = _frac_xirr(cashflows, dates)
+    return rate * 100 if rate is not None else None
+
+def _frac_find_min_cuotas_proj(val_actual, commission_rate, tir_b_pct, umbral, max_meses, today):
+    t = max_meses
+    for n in range(2, max_meses + 1):
+        tc = _frac_proj_tir_c(val_actual, commission_rate, tir_b_pct, n, t, today)
+        if tc is not None and tc / 100 > umbral:
+            return n, tc
+    return None, None
+
+# ─── Acción por propiedad ─────────────────────────────────────────────────────
+def _frac_accion_propiedad(prop, tasa_dap, umbral, commission_rate, max_meses, today):
+    """Devuelve (texto, color) con la recomendación a nivel propiedad."""
+    dias_prom = prop.get("dias_prom", 0)
+    val       = prop["val"]
+    flujos_b  = prop.get("flujos_b", [])
+
+    ta = _frac_calcular_tir_portafolio(prop.get("flujos_a", []))
+    tb = _frac_calcular_tir_portafolio(prop.get("flujos_b", []))
+    td = _frac_calcular_tir_portafolio(prop.get("flujos_d", []))
+
+    ta_d = ta / 100 if ta is not None else None
+    tb_d = tb / 100 if tb is not None else None
+    td_d = td / 100 if td is not None else None
+
+    if dias_prom <= 90:
+        return "Esperar", "dim"
+    if tb_d is not None and tb_d < 0:
+        return "Vender mal activo", "red"
+    if td_d is not None and td_d < tasa_dap:
+        return "Vender mal activo", "red"
+    if ta_d is not None and ta_d > umbral:
+        return "Comprar", "green"
+    min_c, _ = _frac_find_min_cuotas_proj(val, commission_rate, tb, umbral, max_meses, today)
+    if min_c is not None:
+        return f"Comprar apal. ({min_c})", "yellow"
+    hold_m = _frac_calcular_hold_propiedad(flujos_b, val, tb, umbral)
+    if hold_m == 0:
+        return "Mantener ✓", "orange1"
+    elif hold_m is not None:
+        return f"Mantener {hold_m}m", "orange1"
+    else:
+        return "Vender rent. baja", "dark_orange3"  # plazo excesivo, no activo malo
+
+# ─── Cómputo central ─────────────────────────────────────────────────────────
+def _frac_compute_analysis(conn, tasa_dap, premium, max_meses):
+    compras = conn.execute(f"""
+        WITH latest AS (
+            SELECT purchase_confirmation_id, persona, MAX(extracted_at) AS max_ts
+            FROM {_FRAC_TABLE} GROUP BY purchase_confirmation_id, persona
+        )
+        SELECT
+            m.purchase_confirmation_id          AS pid,
+            m.persona, m.unit_id, m.unit_name, m.kind, m.confirmed_at,
+            MAX(m.bid_preferred_amount_fee)     AS comision,
+            MAX(m.bid_preferred_amount) + MAX(m.bid_preferred_amount_fee) AS capital,
+            SUM(m.current_value)                AS valor_actual
+        FROM {_FRAC_TABLE} m
+        JOIN latest l ON m.purchase_confirmation_id = l.purchase_confirmation_id
+                      AND m.persona = l.persona AND m.extracted_at = l.max_ts
+        WHERE m.status = 'active' AND m.kind IN ('purchase','market')
+        GROUP BY m.purchase_confirmation_id, m.persona, m.unit_id, m.unit_name, m.kind, m.confirmed_at
+        ORDER BY m.unit_name, m.confirmed_at
+    """).fetchall()
+    if not compras:
+        return None
+
+    cache_atrib = {}
+    for r in compras:
+        key = (r["unit_id"], r["persona"])
+        if key not in cache_atrib:
+            cache_atrib[key] = _frac_atribuir_movements(conn, r["unit_id"], r["persona"])
+
+    com_row = conn.execute(f"""
+        SELECT SUM(bid_preferred_amount_fee) AS total_com,
+               SUM(bid_preferred_amount)     AS total_sin_com
+        FROM {_FRAC_TABLE} WHERE status='active' AND kind IN ('purchase','market')
+    """).fetchone()
+    commission_rate = (
+        com_row["total_com"] / com_row["total_sin_com"]
+        if com_row and com_row["total_sin_com"] and com_row["total_sin_com"] > 0
+        else 0.03
+    )
+
+    today  = datetime.date.today()
+    umbral = tasa_dap * (1 + premium)
+    grupos = {k: [] for k in ("esperar", "vender_malo", "vender_bajo_dap", "mantener")}
+
+    totales_por_tipo = {
+        p: {"inv": 0.0, "val": 0.0, "cash_inv": 0.0, "dias_ponderado": 0.0,
+            "cuotas_ponderado": 0.0, "peso_inv": 0.0, "n": 0,
+            "flujos_a": [], "flujos_b": [], "flujos_c": [], "flujos_d": []}
+        for p in ("PN", "PJ")
+    }
+    totales_por_propiedad = _frac_defaultdict(lambda: {
+        "inv": 0.0, "val": 0.0, "cash_inv": 0.0, "dias_ponderado": 0.0,
+        "peso_inv": 0.0, "cuotas_ponderado": 0.0, "n": 0,
+        "flujos_a": [], "flujos_b": [], "flujos_c": [], "flujos_d": [], "name": ""
+    })
+
+    for row in compras:
+        inv_inicial   = row["capital"] or 0
+        comision      = row["comision"] or 0
+        valor         = row["valor_actual"] or 0
+        pid, persona, unit_id, unit_name = row["pid"], row["persona"], row["unit_id"], row["unit_name"] or ""
+        cuotas_reales = _frac_get_num_cuotas(conn, pid, persona)
+        fecha         = str(row["confirmed_at"] or "")[:10]
+        atrib         = cache_atrib.get((unit_id, persona), {}).get(pid, {})
+        valor_actual  = valor + atrib.get("valor_mov", 0.0)
+        inv_sin_com   = inv_inicial - comision
+
+        try:
+            fecha_dt = datetime.date.fromisoformat(fecha)
+            dias     = (today - fecha_dt).days
+        except Exception:
+            fecha_dt, dias = None, 0
+
+        ganancia        = valor_actual - inv_inicial if inv_inicial > 0 else None
+        tir_a = tir_b = tir_c = tir_d = None
+        meses_restantes = None
+        cash_invertido  = None
+
+        if fecha_dt and dias > 30 and valor_actual > 0:
+            cuota_m       = inv_inicial / cuotas_reales if cuotas_reales > 0 else 0
+            cuota_sin_com = inv_sin_com / cuotas_reales if cuotas_reales > 0 else 0
+            n_pagadas     = min(dias // 30, cuotas_reales)
+            cash_invertido = n_pagadas * cuota_m
+            deuda_rest    = (cuotas_reales - n_pagadas) * cuota_m
+            deuda_rest_d  = (cuotas_reales - n_pagadas) * cuota_sin_com
+            exit_neto     = valor_actual - deuda_rest
+            exit_neto_d   = valor_actual - deuda_rest_d
+            fechas_pag    = [fecha_dt + datetime.timedelta(days=30 * i) for i in range(1, n_pagadas + 1)]
+
+            if inv_inicial > 0:
+                totales_por_tipo[persona]["flujos_a"] += [(fecha_dt, -inv_inicial), (today, valor_actual)]
+                totales_por_propiedad[unit_id]["flujos_a"] += [(fecha_dt, -inv_inicial), (today, valor_actual)]
+                rate = _frac_xirr([-inv_inicial, valor_actual], [fecha_dt, today])
+                tir_a = rate * 100 if rate is not None else None
+                if exit_neto > 0:
+                    cfs_c = ([-cuota_m] * n_pagadas + [exit_neto]) if n_pagadas > 0 else [-inv_inicial, exit_neto]
+                    fec_c = (fechas_pag + [today]) if n_pagadas > 0 else [fecha_dt, today]
+                    for fp in fechas_pag:
+                        totales_por_tipo[persona]["flujos_c"].append((fp, -cuota_m))
+                        totales_por_propiedad[unit_id]["flujos_c"].append((fp, -cuota_m))
+                    totales_por_tipo[persona]["flujos_c"].append((today, exit_neto))
+                    totales_por_propiedad[unit_id]["flujos_c"].append((today, exit_neto))
+                    rate_c = _frac_xirr(cfs_c, fec_c)
+                    tir_c  = rate_c * 100 if rate_c is not None else None
+
+            if inv_sin_com > 0:
+                totales_por_tipo[persona]["flujos_b"] += [(fecha_dt, -inv_sin_com), (today, valor_actual)]
+                totales_por_propiedad[unit_id]["flujos_b"] += [(fecha_dt, -inv_sin_com), (today, valor_actual)]
+                rate_b = _frac_xirr([-inv_sin_com, valor_actual], [fecha_dt, today])
+                tir_b  = rate_b * 100 if rate_b is not None else None
+                if exit_neto_d > 0:
+                    cfs_d = ([-cuota_sin_com] * n_pagadas + [exit_neto_d]) if n_pagadas > 0 else [-inv_sin_com, exit_neto_d]
+                    fec_d = (fechas_pag + [today]) if n_pagadas > 0 else [fecha_dt, today]
+                    for fp in fechas_pag:
+                        totales_por_tipo[persona]["flujos_d"].append((fp, -cuota_sin_com))
+                        totales_por_propiedad[unit_id]["flujos_d"].append((fp, -cuota_sin_com))
+                    totales_por_tipo[persona]["flujos_d"].append((today, exit_neto_d))
+                    totales_por_propiedad[unit_id]["flujos_d"].append((today, exit_neto_d))
+                    rate_d = _frac_xirr(cfs_d, fec_d)
+                    tir_d  = rate_d * 100 if rate_d is not None else None
+
+        ta_d = tir_a / 100 if tir_a is not None else None
+        tb_d = tir_b / 100 if tir_b is not None else None
+        td_d = tir_d / 100 if tir_d is not None else None
+
+        if dias <= 90:
+            grupo = "esperar"
+        else:
+            if tb_d is None and td_d is None and ta_d is None:
+                grupo = "esperar"
+            elif tb_d is not None and tb_d < 0:
+                grupo = "vender_malo"
+            elif td_d is not None and td_d < tasa_dap:
+                grupo = "vender_bajo_dap"
+            else:
+                grupo = "mantener"
+            if grupo == "mantener":
+                meses_restantes = _frac_calcular_meses_restantes_hold(
+                    inv_inicial, valor_actual, fecha_dt, tir_b, umbral
+                )
+
+        _cash_base = cash_invertido if (cash_invertido is not None and cash_invertido > 0) else (inv_inicial or None)
+        rent_pct   = (ganancia / _cash_base * 100) if (ganancia is not None and _cash_base) else None
+
+        grupos[grupo].append((
+            pid, persona, str(unit_name)[:45], str(unit_id),
+            fecha, dias, cuotas_reales, inv_inicial, cash_invertido, valor_actual,
+            ganancia, rent_pct, tir_a, tir_b, tir_c, tir_d, meses_restantes
+        ))
+
+        _cash = cash_invertido or 0
+        totales_por_tipo[persona]["inv"]              += inv_inicial
+        totales_por_tipo[persona]["cash_inv"]         += _cash
+        totales_por_tipo[persona]["val"]              += valor_actual
+        totales_por_tipo[persona]["dias_ponderado"]   += dias * _cash
+        totales_por_tipo[persona]["cuotas_ponderado"] += cuotas_reales * _cash
+        totales_por_tipo[persona]["peso_inv"]         += _cash
+        totales_por_tipo[persona]["n"]                += 1
+        totales_por_propiedad[unit_id]["inv"]              += inv_inicial
+        totales_por_propiedad[unit_id]["cash_inv"]         += _cash
+        totales_por_propiedad[unit_id]["val"]              += valor_actual
+        totales_por_propiedad[unit_id]["dias_ponderado"]   += dias * _cash
+        totales_por_propiedad[unit_id]["cuotas_ponderado"] += cuotas_reales * _cash
+        totales_por_propiedad[unit_id]["peso_inv"]         += _cash
+        totales_por_propiedad[unit_id]["n"]                += 1
+        totales_por_propiedad[unit_id]["name"]              = unit_name
+
+    for tp in totales_por_tipo:
+        p = totales_por_tipo[tp]["peso_inv"]
+        totales_por_tipo[tp]["dias_prom"]   = totales_por_tipo[tp]["dias_ponderado"]   / p if p > 0 else 0
+        totales_por_tipo[tp]["cuotas_prom"] = totales_por_tipo[tp]["cuotas_ponderado"] / p if p > 0 else 0
+    for uid in totales_por_propiedad:
+        p = totales_por_propiedad[uid]["peso_inv"]
+        totales_por_propiedad[uid]["dias_prom"]   = totales_por_propiedad[uid]["dias_ponderado"]   / p if p > 0 else 0
+        totales_por_propiedad[uid]["cuotas_prom"] = totales_por_propiedad[uid]["cuotas_ponderado"] / p if p > 0 else 0
+
+    grupos["esperar"].sort(key=lambda x: x[5])                                          # días asc → más antiguo primero
+    grupos["vender_malo"].sort(key=lambda x: x[13] if x[13] is not None else 9999)      # TIR B asc → más negativo primero
+    grupos["vender_bajo_dap"].sort(key=lambda x: x[13] if x[13] is not None else 9999)  # TIR B asc → más lejos del umbral primero
+    grupos["mantener"].sort(key=lambda x: x[16] if x[16] is not None else 9999)         # hold_m asc → más cerca del umbral primero
+
+    n_por_uid = _frac_defaultdict(int)
+    for g in grupos.values():
+        for f in g:
+            n_por_uid[f[3]] += 1
+
+    prop_compra_sin_apal, prop_compra_solo_apal = [], []
+    for uid, prop in totales_por_propiedad.items():
+        if prop["dias_prom"] <= 90:
+            continue
+        ta = _frac_calcular_tir_portafolio(prop["flujos_a"])
+        tb = _frac_calcular_tir_portafolio(prop["flujos_b"])
+        tc = _frac_calcular_tir_portafolio(prop["flujos_c"])
+        td = _frac_calcular_tir_portafolio(prop["flujos_d"])
+        inv, val = prop["inv"], prop["val"]
+        cash_inv_p = prop.get("cash_inv", 0)
+        gan_p      = val - inv
+        _base_p    = cash_inv_p if cash_inv_p > 0 else (inv or None)
+        rent_p     = (gan_p / _base_p * 100) if _base_p else None
+        entry = {
+            "uid": uid, "name": prop["name"],
+            "n": n_por_uid[uid],
+            "dias": int(prop["dias_prom"]),
+            "cuotas_prom": prop["cuotas_prom"],
+            "inv": inv, "val": val, "cash_inv": cash_inv_p,
+            "gan": gan_p, "rent": rent_p,
+            "ta": ta, "tb": tb, "tc": tc, "td": td,
+            "min_cuotas": None, "tc_min": None,
+        }
+        if ta is not None and ta / 100 > umbral:
+            prop_compra_sin_apal.append(entry)
+        else:
+            min_c, tc_min = _frac_find_min_cuotas_proj(val, commission_rate, tb, umbral, max_meses, today)
+            if min_c is not None:
+                entry["min_cuotas"] = min_c
+                entry["tc_min"]     = tc_min
+                prop_compra_solo_apal.append(entry)
+
+    prop_compra_sin_apal.sort(key=lambda x: x["tb"] if x["tb"] is not None else -999, reverse=True)       # TIR B desc → mejor retorno limpio primero
+    prop_compra_solo_apal.sort(key=lambda x: x["tc_min"] if x["tc_min"] is not None else -999, reverse=True)  # TIR C* desc → mejor retorno apalancado primero
+
+    inv_total      = sum(t["inv"]     for t in totales_por_tipo.values())
+    val_total      = sum(t["val"]     for t in totales_por_tipo.values())
+    gan_total      = val_total - inv_total
+    cash_inv_total = sum(t["cash_inv"] for t in totales_por_tipo.values())
+    _rent_base     = cash_inv_total if cash_inv_total > 0 else (inv_total or None)
+    rent_total     = (gan_total / _rent_base * 100) if (_rent_base and gan_total is not None) else None
+    dias_pond_total = sum(t["dias_ponderado"] for t in totales_por_tipo.values())
+    peso_total      = sum(t["peso_inv"]       for t in totales_por_tipo.values())
+    dias_prom_total = dias_pond_total / peso_total if peso_total > 0 else 0
+    flujos_a_tot = totales_por_tipo["PN"]["flujos_a"] + totales_por_tipo["PJ"]["flujos_a"]
+    flujos_b_tot = totales_por_tipo["PN"]["flujos_b"] + totales_por_tipo["PJ"]["flujos_b"]
+    flujos_c_tot = totales_por_tipo["PN"]["flujos_c"] + totales_por_tipo["PJ"]["flujos_c"]
+    flujos_d_tot = totales_por_tipo["PN"]["flujos_d"] + totales_por_tipo["PJ"]["flujos_d"]
+
+    return {
+        "grupos": grupos,
+        "totales_por_tipo": totales_por_tipo,
+        "totales_por_propiedad": totales_por_propiedad,
+        "umbral": umbral, "tasa_dap": tasa_dap, "max_meses": max_meses,
+        "commission_rate": commission_rate, "premium": premium,
+        "inv_total": inv_total, "val_total": val_total,
+        "cash_inv_total": cash_inv_total,
+        "gan_total": gan_total, "rent_total": rent_total,
+        "dias_prom_total": dias_prom_total,
+        "cuotas_prom_total": (
+            sum(t["cuotas_ponderado"] for t in totales_por_tipo.values()) / peso_total
+            if peso_total > 0 else 0
+        ),
+        "tir_a_total": _frac_calcular_tir_portafolio(flujos_a_tot),
+        "tir_b_total": _frac_calcular_tir_portafolio(flujos_b_tot),
+        "tir_c_total": _frac_calcular_tir_portafolio(flujos_c_tot),
+        "tir_d_total": _frac_calcular_tir_portafolio(flujos_d_tot),
+        "prop_compra_sin_apal": prop_compra_sin_apal,
+        "prop_compra_solo_apal": prop_compra_solo_apal,
+    }
+
+# ─── Display helpers ─────────────────────────────────────────────────────────
+def _frac_sep():
+    _console.print(Rule(style="dim #2a2a2a"))
+
+def _frac_tabla_compra_por_propiedad(t_rich, filas_grupo, totales_por_propiedad):
+    by_uid = _frac_defaultdict(list)
+    for fila in filas_grupo:
+        by_uid[fila[3]].append(fila)
+    result = []
+    for uid, rows in by_uid.items():
+        inv_t      = sum(r[7] for r in rows)
+        cash_inv_t = sum(r[8] for r in rows if r[8] is not None)
+        val_t      = sum(r[9] for r in rows)
+        _peso_d    = cash_inv_t if cash_inv_t > 0 else inv_t
+        dias_p     = int(sum(r[5] * (r[8] or r[7]) for r in rows) / _peso_d) if _peso_d > 0 else 0
+        prop       = totales_por_propiedad.get(uid, {})
+        result.append({
+            "uid": uid, "name": rows[0][2], "n": len(rows), "dias": dias_p,
+            "inv": inv_t, "cash_inv": cash_inv_t, "val": val_t, "gan": val_t - inv_t,
+            "rent": (val_t - inv_t) / cash_inv_t * 100 if cash_inv_t > 0 else (
+                    (val_t / inv_t - 1) * 100 if inv_t > 0 else None),
+            "ta": _frac_calcular_tir_portafolio(prop.get("flujos_a", [])),
+            "tb": _frac_calcular_tir_portafolio(prop.get("flujos_b", [])),
+            "tc": _frac_calcular_tir_portafolio(prop.get("flujos_c", [])),
+            "td": _frac_calcular_tir_portafolio(prop.get("flujos_d", [])),
+        })
+    result.sort(key=lambda x: x["ta"] if x["ta"] is not None else -999, reverse=True)
+    for p in result:
+        t_rich.add_row(
+            p["name"], p["uid"], str(p["n"]), f"{p['dias']/30:.1f}",
+            _frac_fmtnum(p["inv"]), _frac_fmtnum(p["val"]), _frac_fmtnum(p["cash_inv"]),
+            _frac_colored(p["gan"], signed=True), _frac_colored(p["rent"], _frac_pct_str),
+            _frac_colored(p["ta"], _frac_pct_str), _frac_colored(p["tb"], _frac_pct_str),
+            _frac_colored(p["tc"], _frac_pct_str), _frac_colored(p["td"], _frac_pct_str),
+        )
+
+def _frac_make_tabla_compra():
+    t = Table(box=rich_box.SIMPLE_HEAVY, show_header=True, header_style="bold orange1", highlight=True)
+    t.add_column("Activo",               style="white",  max_width=45, overflow="ellipsis", no_wrap=True)
+    t.add_column("ID",                   style="dim",    width=6,  overflow="ellipsis")
+    t.add_column("#",                    justify="right", style="dim", width=3)
+    t.add_column("Meses\npromedio",      justify="right", width=10)
+    t.add_column("Cuotas\npromedio",     justify="right", style="dim", width=11)
+    t.add_column("Inversión\nnominal",   justify="right", style="cyan",   width=11)
+    t.add_column("Valor\nactual",        justify="right", style="green",  width=11)
+    t.add_column("Cash\ninvertido",      justify="right", style="yellow", width=11)
+    t.add_column("Ganancia\nsobre cash", justify="right", width=12)
+    t.add_column("Rentabilidad\n% cash", justify="right", width=12)
+    t.add_column("TIR A",                justify="right", width=7)
+    t.add_column("TIR B",                justify="right", width=7)
+    t.add_column("TIR C",                justify="right", width=7)
+    t.add_column("TIR D",                justify="right", width=7)
+    return t
+
+def _frac_make_tabla_purchase(show_hold=False):
+    t = Table(box=rich_box.SIMPLE_HEAVY, show_header=True, header_style="bold orange1", highlight=True)
+    t.add_column("ID Compra",            style="dim",   max_width=12, overflow="ellipsis")
+    t.add_column("Tipo",                 style="dim",   width=4)
+    t.add_column("Activo",               style="white", max_width=40, overflow="ellipsis", no_wrap=True)
+    t.add_column("ID",                   style="dim",   width=6, overflow="ellipsis")
+    t.add_column("Fecha",                style="dim",   width=10)
+    t.add_column("Meses",                justify="right", width=6)
+    t.add_column("Cuotas",               justify="right", style="dim", width=7)
+    t.add_column("Inversión\nnominal",   justify="right", style="cyan",   width=12)
+    t.add_column("Valor\nactual",        justify="right", style="green",  width=11)
+    t.add_column("Cash\ninvertido",      justify="right", style="yellow", width=11)
+    t.add_column("Ganancia\nsobre cash", justify="right", width=12)
+    t.add_column("Rentabilidad\n% cash", justify="right", width=12)
+    t.add_column("TIR A",                justify="right", width=7)
+    t.add_column("TIR B",                justify="right", width=7)
+    t.add_column("TIR C",                justify="right", width=7)
+    t.add_column("TIR D",                justify="right", width=7)
+    if show_hold:
+        t.add_column("Hold\n(meses)",    justify="right", style="yellow", width=9)
+    return t
+
+def _frac_fill_tabla_purchase(t, filas, show_hold=False):
+    for fila in filas:
+        pid, tipo, name, uid, fecha, dias, cuotas, inv, cash_inv, val, gan, rent, ta, tb, tc, td, hold_m = fila
+        cells = [
+            pid[-12:] if len(pid) > 12 else pid,
+            tipo, name, uid, fecha, f"{dias/30:.1f}", str(cuotas),
+            _frac_fmtnum(inv), _frac_fmtnum(val), _frac_fmtnum(cash_inv),
+            _frac_colored(gan, signed=True), _frac_colored(rent, _frac_pct_str),
+            _frac_colored(ta, _frac_pct_str), _frac_colored(tb, _frac_pct_str),
+            _frac_colored(tc, _frac_pct_str), _frac_colored(td, _frac_pct_str),
+        ]
+        if show_hold:
+            if hold_m is None:
+                h = "[dim]>18m[/dim]"
+            elif hold_m == 0:
+                h = "ya ✓"
+            else:
+                h = f"{hold_m}m"
+            cells.append(h)
+        t.add_row(*cells)
+
+def _frac_add_total_purchase(t, filas, show_hold=False):
+    """Agrega fila TOTAL a una tabla de tipo purchase (tuplas de grupos)."""
+    if not filas:
+        return
+    inv_t  = sum(f[7]  for f in filas if f[7]  is not None)
+    cash_t = sum(f[8]  for f in filas if f[8]  is not None)
+    val_t  = sum(f[9]  for f in filas if f[9]  is not None)
+    gan_t  = sum(f[10] for f in filas if f[10] is not None)
+    rent_t = (gan_t / cash_t * 100) if cash_t > 0 else None
+    ncols  = 17 if show_hold else 16
+    t.add_row(*[""] * ncols)
+    t.add_section()
+    cells = [
+        "[bold]TOTAL[/bold]", "", "", "", "", "", "",
+        f"[bold cyan]{_frac_fmtnum(inv_t)}[/bold cyan]",
+        f"[bold green]{_frac_fmtnum(val_t)}[/bold green]",
+        f"[bold yellow]{_frac_fmtnum(cash_t)}[/bold yellow]",
+        _frac_colored(gan_t, signed=True),
+        _frac_colored(rent_t, _frac_pct_str),
+        "", "", "", "",
+    ]
+    if show_hold:
+        cells.append("")
+    t.add_row(*cells)
+
+# ─── Vistas individuales ─────────────────────────────────────────────────────
+def _frac_show_comprar(data):
+    umbral    = data["umbral"]
+    sin_apal  = data["prop_compra_sin_apal"]
+    solo_apal = data["prop_compra_solo_apal"]
+
+    def _fill_sin_apal(t, entries):
+        for p in entries:
+            t.add_row(
+                p["name"], p["uid"], str(p["n"]), f"{p['dias']/30:.1f}",
+                f"{p['cuotas_prom']:.1f}",
+                _frac_fmtnum(p["inv"]), _frac_fmtnum(p["val"]), _frac_fmtnum(p.get("cash_inv", 0)),
+                _frac_colored(p["gan"], signed=True), _frac_colored(p["rent"], _frac_pct_str),
+                _frac_colored(p["ta"], _frac_pct_str), _frac_colored(p["tb"], _frac_pct_str),
+                _frac_colored(p["tc"], _frac_pct_str), _frac_colored(p["td"], _frac_pct_str),
+            )
+
+    def _make_tabla_solo_apal():
+        t = Table(box=rich_box.SIMPLE_HEAVY, show_header=True, header_style="bold orange1", highlight=True)
+        t.add_column("Activo",               style="white", max_width=38, overflow="ellipsis", no_wrap=True)
+        t.add_column("ID",                   style="dim",   width=6, overflow="ellipsis")
+        t.add_column("#",                    justify="right", style="dim", width=3)
+        t.add_column("Meses\npromedio",      justify="right", width=10)
+        t.add_column("Cuotas\npromedio",     justify="right", style="dim", width=11)
+        t.add_column("Inversión\nnominal",   justify="right", style="cyan",  width=11)
+        t.add_column("Valor\nactual",        justify="right", style="green", width=11)
+        t.add_column("Ganancia\nsobre cash", justify="right", width=12)
+        t.add_column("Rentabilidad\n% cash", justify="right", width=12)
+        t.add_column("TIR A",                justify="right", width=7)
+        t.add_column("TIR B",                justify="right", width=7)
+        t.add_column("Mín.\ncuotas",         justify="right", style="yellow", width=8)
+        t.add_column("TIR C*",               justify="right", width=8)
+        return t
+
+    def _fill_solo_apal(t, entries):
+        for p in entries:
+            t.add_row(
+                p["name"], p["uid"], str(p["n"]), f"{p['dias']/30:.1f}",
+                f"{p['cuotas_prom']:.1f}",
+                _frac_fmtnum(p["inv"]), _frac_fmtnum(p["val"]),
+                _frac_colored(p["gan"], signed=True), _frac_colored(p["rent"], _frac_pct_str),
+                _frac_colored(p["ta"], _frac_pct_str), _frac_colored(p["tb"], _frac_pct_str),
+                f"[yellow]{p['min_cuotas']}[/yellow]" if p.get("min_cuotas") else "—",
+                _frac_colored(p.get("tc_min"), _frac_pct_str),
+            )
+
+    if not sin_apal and not solo_apal:
+        _console.print("\n[dim]Sin oportunidades de compra en este momento.[/dim]")
+        return
+
+    tasa_dap = data["tasa_dap"]
+    premium  = data["premium"]
+    if sin_apal:
+        _console.print("\n[bold]Comprar[/bold]")
+        _console.print(
+            f"[dim]TIR A portafolio > tasa DAP {tasa_dap*100:.1f}% + premium {premium*100:.0f}% "
+            f"(umbral {umbral*100:.2f}%) — rinde bien al contado[/dim]"
+        )
+        _console.print("[dim]TIR A = contado + comisión · TIR B = contado sin comisión · TIR C = cuotas + comisión · TIR D = cuotas sin comisión[/dim]")
+        t = _frac_make_tabla_compra()
+        _fill_sin_apal(t, sin_apal)
+        # total row: cols=14, inv@5, val@6, cash@7, gan@8, rent@9
+        inv_t  = sum(p["inv"]  for p in sin_apal)
+        val_t  = sum(p["val"]  for p in sin_apal)
+        cash_t = sum(p.get("cash_inv", 0) for p in sin_apal)
+        gan_t  = sum(p["gan"]  for p in sin_apal if p["gan"] is not None)
+        rent_t = (gan_t / cash_t * 100) if cash_t > 0 else None
+        t.add_row(*[""] * 14); t.add_section()
+        t.add_row("", "", "", "", "",
+            f"[bold cyan]{_frac_fmtnum(inv_t)}[/bold cyan]",
+            f"[bold green]{_frac_fmtnum(val_t)}[/bold green]",
+            f"[bold yellow]{_frac_fmtnum(cash_t)}[/bold yellow]",
+            _frac_colored(gan_t, signed=True), _frac_colored(rent_t, _frac_pct_str),
+            "", "", "", "")
+        _console.print(t)
+
+    if solo_apal:
+        _console.print("\n[bold]Comprar apalancado[/bold]")
+        _console.print(
+            f"[dim]TIR A ≤ tasa DAP {tasa_dap*100:.1f}% + premium {premium*100:.0f}% "
+            f"(umbral {umbral*100:.2f}%), pero existe un mínimo de cuotas con el que TIR C lo supera[/dim]"
+        )
+        _console.print("[dim]TIR A = contado + comisión · TIR B = contado sin comisión · TIR C = cuotas + comisión · TIR D = cuotas sin comisión[/dim]")
+        t = _make_tabla_solo_apal()
+        _fill_solo_apal(t, solo_apal)
+        # total row: cols=13, inv@5, val@6, gan@7, rent@8 (no cash_inv col)
+        inv_t  = sum(p["inv"] for p in solo_apal)
+        val_t  = sum(p["val"] for p in solo_apal)
+        gan_t  = sum(p["gan"] for p in solo_apal if p["gan"] is not None)
+        t.add_row(*[""] * 13); t.add_section()
+        t.add_row("", "", "", "", "",
+            f"[bold cyan]{_frac_fmtnum(inv_t)}[/bold cyan]",
+            f"[bold green]{_frac_fmtnum(val_t)}[/bold green]",
+            _frac_colored(gan_t, signed=True), "", "", "", "", "")
+        _console.print(t)
+
+def _frac_show_vender(data):
+    grupos   = data["grupos"]
+    tasa_dap = data["tasa_dap"]
+    specs = [
+        ("vender_malo",     "VENDER (activo malo)",
+         "TIR B < 0 — el activo destruye valor incluso sin comisión"),
+        ("vender_bajo_dap", "VENDER (rinde menos que DAP)",
+         f"TIR D < tasa DAP {tasa_dap*100:.1f}% — ni apalancado supera el costo de oportunidad"),
+    ]
+    if not any(grupos[k] for k, _, _ in specs):
+        _console.print("\n[dim]Sin alertas de venta.[/dim]")
+        return
+    for clave, titulo, condicion in specs:
+        if not grupos[clave]:
+            continue
+        _console.print(f"\n[bold red]{titulo}[/bold red]")
+        _console.print(f"[dim]{condicion}[/dim]")
+        _console.print("[dim]TIR A = contado + comisión · TIR B = contado sin comisión · TIR C = cuotas + comisión · TIR D = cuotas sin comisión[/dim]")
+        t = _frac_make_tabla_purchase()
+        _frac_fill_tabla_purchase(t, grupos[clave])
+        _frac_add_total_purchase(t, grupos[clave])
+        _console.print(t)
+
+def _frac_show_esperar(data):
+    filas = data["grupos"]["esperar"]
+    if not filas:
+        _console.print("\n[dim]Sin posiciones en espera.[/dim]")
+        return
+    _console.print("\n[bold]Esperar[/bold]")
+    _console.print("[dim]Menos de 90 días o TIR no calculable — evaluar más adelante[/dim]")
+    t = _frac_make_tabla_purchase(show_hold=False)
+    _frac_fill_tabla_purchase(t, filas, show_hold=False)
+    _frac_add_total_purchase(t, filas)
+    _console.print(t)
+
+def _frac_show_mantener(data):
+    filas = data["grupos"]["mantener"]
+    if not filas:
+        _console.print("\n[dim]Sin posiciones para mantener.[/dim]")
+        return
+    _console.print("\n[bold]Mantener[/bold]")
+    _console.print(
+        f"[dim]TIR B ≥ 0 · TIR D ≥ DAP — Hold (meses): tiempo adicional para superar "
+        f"tasa DAP {data['tasa_dap']*100:.1f}% + premium {data['premium']*100:.0f}% "
+        f"(umbral {data['umbral']*100:.2f}%)[/dim]"
+    )
+    _console.print("[dim]TIR A = contado + comisión · TIR B = contado sin comisión · TIR C = cuotas + comisión · TIR D = cuotas sin comisión[/dim]")
+    t = _frac_make_tabla_purchase(show_hold=True)
+    _frac_fill_tabla_purchase(t, filas, show_hold=True)
+    _frac_add_total_purchase(t, filas, show_hold=True)
+    _console.print(t)
+
+def _frac_show_portafolio(data):
+    totales_por_tipo = data["totales_por_tipo"]
+    _console.print("\n[bold orange1]Portafolio  (PN · PJ · Total)[/bold orange1]\n")
+    t = Table(box=rich_box.SIMPLE_HEAVY, show_header=True, header_style="bold orange1")
+    t.add_column("Tipo",                 style="dim",    width=6)
+    t.add_column("#\ncompras",           justify="right", style="dim",    width=7)
+    t.add_column("Inversión\nnominal",   justify="right", style="cyan",   width=13)
+    t.add_column("Valor\nactual",        justify="right", style="green",  width=13)
+    t.add_column("Cash\ninvertido",      justify="right", style="yellow", width=13)
+    t.add_column("Ganancia\nsobre cash", justify="right", width=13)
+    t.add_column("Rentabilidad\n% cash", justify="right", width=13)
+    t.add_column("Meses\npromedio",      justify="right", style="dim",    width=10)
+    t.add_column("Cuotas\npromedio",     justify="right", style="dim",    width=10)
+    t.add_column("TIR A",                justify="right", width=10)
+    t.add_column("TIR B",                justify="right", width=10)
+    t.add_column("TIR C",                justify="right", width=10)
+    t.add_column("TIR D",                justify="right", width=10)
+    n_total = 0
+    for tipo in ("PN", "PJ"):
+        d        = totales_por_tipo[tipo]
+        inv, val = d["inv"], d["val"]
+        cash_inv = d["cash_inv"]
+        gan      = val - inv
+        _base    = cash_inv if cash_inv > 0 else (inv or None)
+        rent     = (gan / _base * 100) if (_base and gan is not None) else None
+        n_total += d.get("n", 0)
+        t.add_row(
+            tipo, str(d.get("n", 0)),
+            _frac_fmtnum(inv), _frac_fmtnum(val), _frac_fmtnum(cash_inv),
+            _frac_colored(gan, signed=True), _frac_colored(rent, _frac_pct_str),
+            f"{d['dias_prom']/30:.1f}", f"{d['cuotas_prom']:.1f}",
+            _frac_colored(_frac_calcular_tir_portafolio(d["flujos_a"]), _frac_pct_str),
+            _frac_colored(_frac_calcular_tir_portafolio(d["flujos_b"]), _frac_pct_str),
+            _frac_colored(_frac_calcular_tir_portafolio(d["flujos_c"]), _frac_pct_str),
+            _frac_colored(_frac_calcular_tir_portafolio(d["flujos_d"]), _frac_pct_str),
+        )
+    t.add_row(*[""] * 13)
+    t.add_section()
+    t.add_row(
+        "[bold]TOTAL[/bold]", f"[bold]{n_total}[/bold]",
+        f"[bold cyan]{_frac_fmtnum(data['inv_total'])}[/bold cyan]",
+        f"[bold green]{_frac_fmtnum(data['val_total'])}[/bold green]",
+        f"[bold yellow]{_frac_fmtnum(data['cash_inv_total'])}[/bold yellow]",
+        _frac_colored(data["gan_total"], signed=True),
+        _frac_colored(data["rent_total"], _frac_pct_str),
+        f"{data['dias_prom_total']/30:.1f}",
+        f"{data['cuotas_prom_total']:.1f}",
+        _frac_colored(data["tir_a_total"], _frac_pct_str),
+        _frac_colored(data["tir_b_total"], _frac_pct_str),
+        _frac_colored(data["tir_c_total"], _frac_pct_str),
+        _frac_colored(data["tir_d_total"], _frac_pct_str),
+    )
+    _console.print(t)
+
+def _frac_show_por_propiedad(data):
+    totales_por_propiedad = data["totales_por_propiedad"]
+    tasa_dap       = data["tasa_dap"]
+    umbral         = data["umbral"]
+    commission_rate= data["commission_rate"]
+    max_meses     = data["max_meses"]
+    today          = datetime.date.today()
+    _console.print("\n[bold orange1]Por propiedad  (PN + PJ)[/bold orange1]\n")
+    t = Table(box=rich_box.SIMPLE_HEAVY, show_header=True, header_style="bold orange1")
+    t.add_column("Propiedad",            style="white", max_width=35, overflow="ellipsis", no_wrap=True)
+    t.add_column("ID",                   style="dim",   width=6, overflow="ellipsis")
+    t.add_column("#\ncompras",           justify="right", style="dim", width=7)
+    t.add_column("Acción",               justify="left", width=18)
+    t.add_column("Inversión\nnominal",   justify="right", style="cyan",   width=13)
+    t.add_column("Valor\nactual",        justify="right", style="green",  width=13)
+    t.add_column("Cash\ninvertido",      justify="right", style="yellow", width=13)
+    t.add_column("Ganancia\nsobre cash", justify="right", width=13)
+    t.add_column("Rentabilidad\n% cash", justify="right", width=13)
+    t.add_column("Meses\npromedio",      justify="right", style="dim",    width=10)
+    t.add_column("Cuotas\npromedio",     justify="right", style="dim",    width=10)
+    t.add_column("TIR A",                justify="right", width=10)
+    t.add_column("TIR B",                justify="right", width=10)
+    t.add_column("TIR C",                justify="right", width=10)
+    t.add_column("TIR D",                justify="right", width=10)
+
+    def _tb(d):
+        v = _frac_calcular_tir_portafolio(d["flujos_b"])
+        return v if v is not None else -9999
+
+    for uid, d in sorted(totales_por_propiedad.items(), key=lambda x: _tb(x[1]), reverse=True):
+        inv, val = d["inv"], d["val"]
+        cash_p   = d.get("cash_inv", 0)
+        gan      = val - inv
+        _base_p  = cash_p if cash_p > 0 else (inv or None)
+        rent     = (gan / _base_p * 100) if _base_p else None
+        accion_txt, accion_color = _frac_accion_propiedad(
+            d, tasa_dap, umbral, commission_rate, max_meses, today
+        )
+        t.add_row(
+            d["name"], uid, str(d.get("n", 0)),
+            f"[{accion_color}]{accion_txt}[/{accion_color}]",
+            _frac_fmtnum(inv), _frac_fmtnum(val), _frac_fmtnum(cash_p),
+            _frac_colored(gan, signed=True), _frac_colored(rent, _frac_pct_str),
+            f"{d['dias_prom']/30:.1f}", f"{d.get('cuotas_prom', 0):.1f}",
+            _frac_colored(_frac_calcular_tir_portafolio(d["flujos_a"]), _frac_pct_str),
+            _frac_colored(_frac_calcular_tir_portafolio(d["flujos_b"]), _frac_pct_str),
+            _frac_colored(_frac_calcular_tir_portafolio(d["flujos_c"]), _frac_pct_str),
+            _frac_colored(_frac_calcular_tir_portafolio(d["flujos_d"]), _frac_pct_str),
+        )
+    t.add_row(*[""] * 15)
+    t.add_section()
+    n_prop_total = sum(d.get("n", 0) for d in totales_por_propiedad.values())
+    t.add_row(
+        "[bold]TOTAL[/bold]", "", str(n_prop_total), "",
+        f"[bold cyan]{_frac_fmtnum(data['inv_total'])}[/bold cyan]",
+        f"[bold green]{_frac_fmtnum(data['val_total'])}[/bold green]",
+        f"[bold yellow]{_frac_fmtnum(data['cash_inv_total'])}[/bold yellow]",
+        _frac_colored(data["gan_total"], signed=True),
+        _frac_colored(data["rent_total"], _frac_pct_str),
+        f"{data['dias_prom_total']/30:.1f}",
+        f"{data['cuotas_prom_total']:.1f}",
+        _frac_colored(data["tir_a_total"], _frac_pct_str),
+        _frac_colored(data["tir_b_total"], _frac_pct_str),
+        _frac_colored(data["tir_c_total"], _frac_pct_str),
+        _frac_colored(data["tir_d_total"], _frac_pct_str),
+    )
+    _console.print(t)
+    _console.print(
+        "  [green]Comprar[/green]             TIR A > umbral — rinde bien al contado\n"
+        "  [yellow]Comprar apal. (X)[/yellow]  solo apalancado — X = mín. cuotas para superar umbral con TIR C\n"
+        "  [orange1]Mantener Xm[/orange1]       esperar X meses más para superar umbral (proyección TIR B)\n"
+        "  [orange1]Mantener ✓[/orange1]        ya supera umbral hoy\n"
+        "  [red]Vender mal activo[/red]   TIR B < 0 (destruye valor) o TIR D < DAP\n"
+        "  [dark_orange3]Vender rent. baja[/dark_orange3]   activo no malo, pero superar umbral tomaría más de 18 meses\n"
+        "  [dim]Esperar[/dim]             promedio < 90 días — muy temprano para evaluar\n"
+        f"  [dim]Umbral = DAP {tasa_dap*100:.1f}% + premium {data['premium']*100:.0f}% = {umbral*100:.2f}%[/dim]"
+    )
+
+# ─── Vista: todas las compras ordenadas de mejor a peor ──────────────────────
+def _frac_show_todas_compras(data):
+    grupos    = data["grupos"]
+    tasa_dap  = data["tasa_dap"]
+    umbral    = data["umbral"]
+
+    def _accion_compra(grupo, hold_m):
+        if grupo == "esperar":
+            return "Esperar", "dim"
+        if grupo == "vender_malo":
+            return "Vender mal activo", "red"
+        if grupo == "vender_bajo_dap":
+            return "Vender mal activo", "red"
+        # mantener: todo lo que no es vender ni esperar
+        if hold_m is None:
+            return "Vender rent. baja", "dark_orange3"  # plazo excesivo, no activo malo
+        return "Mantener", "orange1"
+
+    # Juntar todas las compras con su grupo
+    todas = []
+    for grupo, filas in grupos.items():
+        for fila in filas:
+            todas.append((grupo, fila))
+
+    # Ordenar: Esperar siempre al fondo; resto por TIR B asc (peor primero)
+    def _sort_key(item):
+        grupo, fila = item
+        es_esperar = 1 if grupo == "esperar" else 0
+        tir_b = fila[13] if fila[13] is not None else 9999
+        return (es_esperar, tir_b)
+    todas.sort(key=_sort_key)
+
+    _console.print("\n[bold orange1]Todas las compras  (peor → mejor TIR B)[/bold orange1]\n")
+    t = Table(box=rich_box.SIMPLE_HEAVY, show_header=True, header_style="bold orange1")
+    t.add_column("Propiedad",            style="white", max_width=35, overflow="ellipsis", no_wrap=True)
+    t.add_column("ID",                   style="dim",   width=6, overflow="ellipsis")
+    t.add_column("P.",                   style="dim",   width=3)
+    t.add_column("Purchase ID",          style="dim",   max_width=14, overflow="ellipsis", no_wrap=True)
+    t.add_column("Acción",               justify="left", width=18)
+    t.add_column("Hold\n(meses)",        justify="right", style="dim", width=7)
+    t.add_column("Fecha",                style="dim",   width=10)
+    t.add_column("Meses",                justify="right", style="dim", width=5)
+    t.add_column("Inversión\nnominal",   justify="right", style="cyan",   width=13)
+    t.add_column("Valor\nactual",        justify="right", style="green",  width=13)
+    t.add_column("Cash\ninvertido",      justify="right", style="yellow", width=11)
+    t.add_column("Ganancia\nsobre cash", justify="right", width=13)
+    t.add_column("Rentabilidad\n% cash", justify="right", width=13)
+    t.add_column("TIR A",                justify="right", width=7)
+    t.add_column("TIR B",                justify="right", width=7)
+    t.add_column("TIR C",                justify="right", width=7)
+    t.add_column("TIR D",                justify="right", width=7)
+
+    inv_total = cash_total = val_total = gan_total = 0.0
+    for grupo, fila in todas:
+        pid, persona, name, uid, fecha, dias, cuotas, inv, cash_inv, val, gan, rent, ta, tb, tc, td, hold_m = fila
+        accion_txt, accion_color = _accion_compra(grupo, hold_m)
+        if grupo in ("vender_malo", "vender_bajo_dap"):
+            hold_str = "[dim]n/a[/dim]"
+        elif hold_m is None:
+            hold_str = "[dim]>18m[/dim]"
+        elif hold_m == 0:
+            hold_str = "ya ✓"
+        else:
+            hold_str = f"{hold_m}m"
+        t.add_row(
+            name, uid, persona, pid[-14:] if len(pid) > 14 else pid,
+            f"[{accion_color}]{accion_txt}[/{accion_color}]",
+            f"[dim]{hold_str}[/dim]",
+            fecha, f"{dias/30:.1f}",
+            _frac_fmtnum(inv), _frac_fmtnum(val), _frac_fmtnum(cash_inv),
+            _frac_colored(gan, signed=True), _frac_colored(rent, _frac_pct_str),
+            _frac_colored(ta, _frac_pct_str), _frac_colored(tb, _frac_pct_str),
+            _frac_colored(tc, _frac_pct_str), _frac_colored(td, _frac_pct_str),
+        )
+        inv_total  += inv  or 0
+        cash_total += cash_inv or 0
+        val_total  += val  or 0
+        gan_total  += gan  or 0
+    rent_total = (gan_total / cash_total * 100) if cash_total > 0 else None
+    t.add_row(*[""] * 17)
+    t.add_section()
+    t.add_row(
+        "[bold]TOTAL[/bold]", "", "", "", "", "", "", "",
+        f"[bold cyan]{_frac_fmtnum(inv_total)}[/bold cyan]",
+        f"[bold green]{_frac_fmtnum(val_total)}[/bold green]",
+        f"[bold yellow]{_frac_fmtnum(cash_total)}[/bold yellow]",
+        _frac_colored(gan_total, signed=True),
+        _frac_colored(rent_total, _frac_pct_str),
+        "", "", "", "",
+    )
+    _console.print(t)
+    _console.print(
+        f"  [orange1]Mantener[/orange1]  todo lo que no es vender ni esperar  ·  "
+        f"Hold = meses adicionales para superar umbral ({umbral*100:.2f}%)  ·  ✓ = ya lo supera\n"
+        f"  [red]Vender mal activo[/red]  TIR B < 0 o TIR D < DAP  ·  "
+        f"[dark_orange3]Vender rent. baja[/dark_orange3]  activo no malo pero recupero > 18 meses"
+    )
+
+# ─── Menú de análisis ────────────────────────────────────────────────────────
+def _frac_menu_analisis(tasa_dap, premium, max_meses=12):
+    conn = _frac_db_conn()
+    _console.print("\n[dim]Calculando...[/dim]")
+    data = _frac_compute_analysis(conn, tasa_dap, premium, max_meses)
+    conn.close()
+    if data is None:
+        _console.print("[yellow]Sin datos. Actualizá datos primero.[/yellow]")
+        return
+    grupos     = data["grupos"]
+    umbral     = data["umbral"]
+    n_comprar      = len(data["prop_compra_sin_apal"])
+    n_comprar_apal = len(data["prop_compra_solo_apal"])
+    n_vender_malo  = len(grupos["vender_malo"])
+    n_vender_baja  = len(grupos["vender_bajo_dap"])
+    n_mantener     = len(grupos["mantener"])
+    n_esperar      = len(grupos["esperar"])
+    n_props        = len(data["totales_por_propiedad"])
+    params_line = (f"DAP {tasa_dap*100:.1f}%  ·  premium {premium*100:.0f}%  ·  "
+                   f"umbral {umbral*100:.2f}%")
+    while True:
+        _console.print(f"\n[dim]{params_line}[/dim]")
+        _console.print("[bold orange1]  ANÁLISIS FRACCIONAL[/bold orange1]")
+        sel = questionary.select(
+            "",
+            choices=[
+                questionary.Choice("  Resumen de rentabilidad", value="resumen"),
+                questionary.Choice("  Recomendaciones",         value="recomendaciones"),
+                questionary.Separator(),
+                questionary.Choice("  « Volver",                value="back"),
+            ],
+            style=QUESTIONARY_STYLE, pointer="»", qmark="",
+        ).ask(patch_stdout=True)
+        if not sel or sel == "back":
+            return
+        if sel == "resumen":
+            _frac_sep()
+            _frac_show_portafolio(data)
+            _frac_show_por_propiedad(data)
+            _console.print("\n[dim]TIR A = contado+com · TIR B = contado s/com · TIR C = cuotas+com · TIR D = cuotas s/com[/dim]")
+            input("\nEnter para volver al menú...")
+        elif sel == "recomendaciones":
+            while True:
+                _console.print(f"\n[dim]{params_line}[/dim]")
+                _console.print("[bold orange1]  RECOMENDACIONES[/bold orange1]")
+                rec = questionary.select(
+                    "",
+                    choices=[
+                        questionary.Choice(f"  Todas las compras",                                        value="todas"),
+                        questionary.Separator(),
+                        questionary.Choice(f"  {'Comprar':<22}({n_comprar}/{n_props} prop)",              value="comprar"),
+                        questionary.Choice(f"  {'Comprar apalancado':<22}({n_comprar_apal}/{n_props} prop)", value="comprar_apal"),
+                        questionary.Choice(f"  {'Vender mal activo':<22}({n_vender_malo})",               value="vender_malo"),
+                        questionary.Choice(f"  {'Vender rent. baja':<22}({n_vender_baja})",               value="vender_baja"),
+                        questionary.Choice(f"  {'Esperar':<22}({n_esperar})",                             value="esperar"),
+                        questionary.Choice(f"  {'Mantener':<22}({n_mantener})",                           value="mantener"),
+                        questionary.Separator(),
+                        questionary.Choice("  « Volver",                                                  value="back"),
+                    ],
+                    style=QUESTIONARY_STYLE, pointer="»", qmark="",
+                ).ask(patch_stdout=True)
+                if not rec or rec == "back":
+                    break
+                _frac_sep()
+                if rec == "todas":           _frac_show_todas_compras(data)
+                elif rec == "comprar":       _frac_show_comprar(data)
+                elif rec == "comprar_apal":  _frac_show_comprar(data)
+                elif rec == "vender_malo":   _frac_show_vender(data)
+                elif rec == "vender_baja":   _frac_show_vender(data)
+                elif rec == "esperar":       _frac_show_esperar(data)
+                elif rec == "mantener":      _frac_show_mantener(data)
+                _console.print("\n[dim]TIR A = contado+com · TIR B = contado s/com · TIR C = cuotas+com · TIR D = cuotas s/com[/dim]")
+                input("\nEnter para volver al menú...")
+
+# ─── Menús principales de Fraccional ─────────────────────────────────────────
+def _frac_menu_actualizar():
+    _console.print("\n  Actualizando PN y PJ...\n")
+    try:
+        import fraccional_scraper as frac
+        frac.init_db()
+        frac.bw_unlock()
+        extracted_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        from playwright.sync_api import sync_playwright
+        with sync_playwright() as p:
+            browser = p.chromium.launch(
+                channel="chrome", headless=False,
+                args=["--disable-blink-features=AutomationControlled"],
+                ignore_default_args=["--enable-automation"],
+            )
+            total = 0
+            items = frac.bw_list_search("fraccional")
+            pj_bw = next(
+                (i for i in items if "owa605" in str(i.get("login", {}).get("username", ""))),
+                None
+            )
+            if pj_bw:
+                total += frac.run_persona(browser, "PJ",
+                    pj_bw["login"]["username"], pj_bw["login"]["password"], extracted_at)
+            else:
+                _console.print("[red][PJ] Sin credenciales en Bitwarden[/red]")
+            pn_user = frac.bw_get("username", "fraccional.cl - Persona Natural")
+            pn_pass = frac.bw_get("password", "fraccional.cl - Persona Natural")
+            if pn_user and pn_pass:
+                total += frac.run_persona(browser, "PN", pn_user, pn_pass, extracted_at, use_iso_context=True)
+            else:
+                _console.print("[red][PN] Sin credenciales[/red]")
+            browser.close()
+        _console.print(f"\n[bold green]✓ {total} registros guardados[/bold green]")
+    except Exception as e:
+        _console.print(f"[bold red]Error en scraper: {e}[/bold red]")
+    input("\nPresiona Enter para continuar...")
+
+def _frac_menu_analizar():
+    params = _frac_get_params()
+    try:
+        _frac_menu_analisis(
+            tasa_dap=params["tasa_dap"],
+            premium=params["premium"],
+            max_meses=int(params["max_meses"]),
+        )
+    except Exception as e:
+        _console.print(f"[bold red]Error en análisis: {e}[/bold red]")
+        import traceback; traceback.print_exc()
+        input("\nPresiona Enter para volver al menú...")
+
+def _frac_menu_parametros():
+    while True:
+        params = _frac_get_params()
+        umbral = params["tasa_dap"] * (1 + params["premium"])
+        _console.print(f"\n  [bold]Parámetros actuales[/bold]")
+        _console.print(f"  Tasa DAP   : [cyan]{params['tasa_dap']*100:.1f}%[/cyan]")
+        _console.print(f"  Premium    : [cyan]{params['premium']*100:.0f}%[/cyan]")
+        _console.print(f"  Umbral     : [cyan]{umbral*100:.2f}%[/cyan]  [dim](= DAP × (1 + premium))[/dim]")
+        _console.print(f"  Meses salida: [cyan]{int(params['max_meses'])}[/cyan]\n")
+        sel = questionary.select(
+            "",
+            choices=[
+                questionary.Choice("  Cambiar tasa DAP",   value="dap"),
+                questionary.Choice("  Cambiar premium",    value="premium"),
+                questionary.Choice("  Cambiar max cuotas", value="cuotas"),
+                questionary.Separator(),
+                questionary.Choice("  « Volver",           value="back"),
+            ],
+            style=QUESTIONARY_STYLE, pointer="»", qmark="",
+        ).ask(patch_stdout=True)
+        if not sel or sel == "back":
+            return
+        if sel == "dap":
+            raw = questionary.text(
+                f"  Nueva tasa DAP (actual {params['tasa_dap']*100:.1f}%) — ej: 4.5 para 4.5%:",
+                style=QUESTIONARY_STYLE,
+            ).ask()
+            if raw:
+                try:
+                    v = float(raw.replace(",", ".").replace("%", "").strip()) / 100
+                    _frac_set_param("tasa_dap", v)
+                    _console.print(f"  [green]✓ tasa_dap → {v*100:.1f}%[/green]")
+                except ValueError:
+                    _console.print("  [red]Valor inválido[/red]")
+        elif sel == "premium":
+            raw = questionary.text(
+                f"  Nuevo premium (actual {params['premium']*100:.0f}%) — ej: 20 para 20%:",
+                style=QUESTIONARY_STYLE,
+            ).ask()
+            if raw:
+                try:
+                    v = float(raw.replace(",", ".").replace("%", "").strip()) / 100
+                    _frac_set_param("premium", v)
+                    _console.print(f"  [green]✓ premium → {v*100:.0f}%[/green]")
+                except ValueError:
+                    _console.print("  [red]Valor inválido[/red]")
+        elif sel == "cuotas":
+            raw = questionary.text(
+                f"  Nuevo máximo de meses para salida (actual {int(params['max_meses'])}) — ej: 12:",
+                style=QUESTIONARY_STYLE,
+            ).ask()
+            if raw:
+                try:
+                    v = int(raw.strip())
+                    if v < 1:
+                        raise ValueError
+                    _frac_set_param("max_meses", float(v))
+                    _console.print(f"  [green]✓ max_meses → {v}[/green]")
+                except ValueError:
+                    _console.print("  [red]Valor inválido (debe ser entero >= 1)[/red]")
+
+_FRACCIONAL_AVAILABLE = True
+_frac_menu_cuotas = None  # no implementado
 
 _console = Console()
 
@@ -11704,17 +12927,14 @@ def main():
         _clear_terminal_buffer()
 
         _top_choices = [
-            questionary.Choice("  Actualizar datos",       value="actualizar"),
-            questionary.Choice("  Visualizar patrimonio",  value="visualizar"),
-            questionary.Choice("  Analizar caja",          value="caja"),
-            questionary.Choice("  Comparar fechas",        value="comparar"),
+            questionary.Choice("  Patrimonio",   value="patrimonio"),
         ]
         if _FRACCIONAL_AVAILABLE:
             _top_choices.append(questionary.Choice("  Fraccional", value="fraccional"))
         _top_choices += [
-            questionary.Choice("  Configuración",           value="config"),
+            questionary.Choice("  Configuración", value="config"),
             questionary.Separator(),
-            questionary.Choice("  Salir",                  value="salir"),
+            questionary.Choice("  Salir",         value="salir"),
         ]
 
         top_sel = questionary.select(
@@ -11729,79 +12949,89 @@ def main():
             _console.clear()
             sys.exit(0)
 
-        # ── ACTUALIZAR DATOS ────────────────────────────────────────────────
-        elif top_sel == "actualizar":
+        # ── PATRIMONIO ──────────────────────────────────────────────────────
+        elif top_sel == "patrimonio":
             while True:
-                sub = _print_table_menu("ACTUALIZAR DATOS", [
-                    "  Actualizar todos los automáticos",
-                    "  Actualizar algunos automáticos",
-                    "  Actualizar algún registro particular",
+                sub = _print_table_menu("PATRIMONIO", [
+                    "  Actualizar datos",
+                    "  Visualizar patrimonio",
+                    "  Analizar caja",
+                    "  Comparar fechas",
                     "  « Volver",
                 ])
-                # sub: 1=Todos auto, 2=Algunos auto, 3=Registro particular, 4=Volver
                 if sub == 1:
-                    try:
-                        bw_unlock()
-                        run_scraping(list(INSTITUTION_ITEMS), full_update=True)
-                    except Exception as e_scrape:
-                        _console.print(f"\n[bold red][ERROR] Scraping falló: {e_scrape}[/bold red]")
-                    finally:
-                        _reset_terminal()
-                        _clear_terminal_buffer()
-                    _console.print("\n[bold green]✓ Actualización completada.[/bold green]")
+                    # Actualizar datos
+                    while True:
+                        sub2 = _print_table_menu("ACTUALIZAR DATOS", [
+                            "  Actualizar todos los automáticos",
+                            "  Actualizar algunos automáticos",
+                            "  Actualizar algún registro particular",
+                            "  « Volver",
+                        ])
+                        if sub2 == 1:
+                            try:
+                                bw_unlock()
+                                run_scraping(list(INSTITUTION_ITEMS), full_update=True)
+                            except Exception as e_scrape:
+                                _console.print(f"\n[bold red][ERROR] Scraping falló: {e_scrape}[/bold red]")
+                            finally:
+                                _reset_terminal()
+                                _clear_terminal_buffer()
+                            _console.print("\n[bold green]✓ Actualización completada.[/bold green]")
+                        elif sub2 == 2:
+                            _actualizar_algunos_automaticos()
+                        elif sub2 == 3:
+                            prompt_manual_items()
+                        else:
+                            break
                 elif sub == 2:
-                    _actualizar_algunos_automaticos()
+                    # Visualizar patrimonio
+                    sub2 = _print_table_menu("VISUALIZAR PATRIMONIO", [
+                        "  Ver tabla completa",
+                        "  Ver tabla resumida",
+                        "  « Volver",
+                    ])
+                    if sub2 == 1:
+                        _clear_content()
+                        show_last_saldos(by_category=False, pause=True, hide_zeros=True)
+                    elif sub2 == 2:
+                        _clear_content()
+                        show_last_saldos(by_category=True, pause=False)
+                        input("\nPresiona Enter para volver al menú...")
                 elif sub == 3:
-                    prompt_manual_items()
+                    # Analizar caja
+                    sub2 = _print_table_menu("ANALIZAR CAJA", [
+                        "  Activos y Pasivos de Corto Plazo",
+                        "  Revisar cupos TdC",
+                        "  Revisar pagos de Tarjetas de Crédito",
+                        "  « Volver",
+                    ])
+                    if sub2 == 1:
+                        _clear_content()
+                        show_caja()
+                    elif sub2 == 2:
+                        _clear_content()
+                        show_cupos_tdc()
+                    elif sub2 == 3:
+                        _clear_content()
+                        show_pagos_tdc()
+                elif sub == 4:
+                    # Comparar fechas
+                    _clear_content()
+                    show_comparison()
                 else:
-                    break  # Volver al top
-
-        # ── VISUALIZAR PATRIMONIO ───────────────────────────────────────────
-        elif top_sel == "visualizar":
-            sub = _print_table_menu("VISUALIZAR PATRIMONIO", [
-                "  Ver tabla completa",
-                "  Ver tabla resumida",
-                "  « Volver",
-            ])
-            # sub: 1=Completa, 2=Resumida, 3=Volver
-            if sub == 1:
-                _clear_content()
-                show_last_saldos(by_category=False, pause=True, hide_zeros=True)
-            elif sub == 2:
-                _clear_content()
-                show_last_saldos(by_category=True, pause=False)
-                input("\nPresiona Enter para volver al menú...")
-
-        # ── ANALIZAR CAJA ───────────────────────────────────────────────────
-        elif top_sel == "caja":
-            sub = _print_table_menu("ANALIZAR CAJA", [
-                "  Activos y Pasivos de Corto Plazo",
-                "  Revisar cupos TdC",
-                "  Revisar pagos de Tarjetas de Crédito",
-                "  « Volver",
-            ])
-            if sub == 1:
-                _clear_content()
-                show_caja()
-            elif sub == 2:
-                _clear_content()
-                show_cupos_tdc()
-            elif sub == 3:
-                _clear_content()
-                show_pagos_tdc()
-
-        # ── COMPARAR FECHAS ─────────────────────────────────────────────────
-        elif top_sel == "comparar":
-            _clear_content()
-            show_comparison()
+                    break
 
         # ── CONFIGURACIÓN ───────────────────────────────────────────────────
         elif top_sel == "config":
-            sub = _print_table_menu("CONFIGURACIÓN", [
+            cfg_opts = [
                 "  Gestión de scrapers",
                 "  Sincronizar Bitwarden",
-                "  « Volver",
-            ])
+            ]
+            if _FRACCIONAL_AVAILABLE:
+                cfg_opts.append("  Parámetros Fraccional")
+            cfg_opts.append("  « Volver")
+            sub = _print_table_menu("CONFIGURACIÓN", cfg_opts)
             if sub == 1:
                 manage_scrapers()
             elif sub == 2:
@@ -11814,6 +13044,8 @@ def main():
                     _console.print("[bold red]✗ Error al sincronizar Bitwarden[/bold red]")
                     _console.print(f"[dim]{result.stderr.strip()}[/dim]")
                 input("\nPresiona Enter para continuar...")
+            elif sub == 3 and _FRACCIONAL_AVAILABLE:
+                _frac_menu_parametros()
 
         # ── FRACCIONAL ──────────────────────────────────────────────────────
         elif top_sel == "fraccional" and _FRACCIONAL_AVAILABLE:
@@ -11824,18 +13056,14 @@ def main():
                 ]
                 if _frac_menu_cuotas:
                     _frac_opts.append("  Configurar cuotas")
-                _frac_opts += ["  Definir parámetros", "  « Volver"]
+                _frac_opts.append("  « Volver")
                 sub = _print_table_menu("FRACCIONAL", _frac_opts)
-                _frac_cuotas_idx = 3 if _frac_menu_cuotas else None
-                _frac_params_idx = 4 if _frac_menu_cuotas else 3
                 if sub == 1:
                     _frac_menu_actualizar()
                 elif sub == 2:
                     _frac_menu_analizar()
-                elif _frac_cuotas_idx and sub == _frac_cuotas_idx:
+                elif _frac_menu_cuotas and sub == 3:
                     _frac_menu_cuotas()
-                elif sub == _frac_params_idx:
-                    _frac_menu_parametros()
                 else:
                     break
 
