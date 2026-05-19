@@ -130,7 +130,8 @@ def _frac_colored(v, fmt_fn=None, signed=False):
     c = "green" if v >= 0 else "red"
     return f"[{c}]{s}[/{c}]"
 
-_frac_pct_str = lambda v: f"{v:+.0f}%" if abs(v) >= 100 else f"{v:+.1f}%"
+_frac_pct_str = lambda v: f"{v:+.0f}%" if abs(v) >= 100 else f"{v:+.1f}%".replace(".", ",")
+_frac_fmt1f   = lambda v: f"{v:.1f}".replace(".", ",")
 
 # ─── XIRR (Newton-Raphson) ───────────────────────────────────────────────────
 def _frac_xirr(cashflows, dates):
@@ -625,7 +626,7 @@ def _frac_tabla_compra_por_propiedad(t_rich, filas_grupo, totales_por_propiedad)
     result.sort(key=lambda x: x["ta"] if x["ta"] is not None else -999, reverse=True)
     for p in result:
         t_rich.add_row(
-            p["name"], p["uid"], str(p["n"]), f"{p['dias']/30:.1f}",
+            p["name"], p["uid"], str(p["n"]), _frac_fmt1f(p['dias']/30),
             _frac_fmtnum(p["inv"]), _frac_fmtnum(p["val"]), _frac_fmtnum(p["cash_inv"]),
             _frac_colored(p["gan"], signed=True), _frac_colored(p["rent"], _frac_pct_str),
             _frac_colored(p["ta"], _frac_pct_str), _frac_colored(p["tb"], _frac_pct_str),
@@ -677,7 +678,7 @@ def _frac_fill_tabla_purchase(t, filas, show_hold=False):
         pid, tipo, name, uid, fecha, dias, cuotas, inv, cash_inv, val, gan, rent, ta, tb, tc, td, hold_m = fila
         cells = [
             pid[-12:] if len(pid) > 12 else pid,
-            tipo, name, uid, fecha, f"{dias/30:.1f}", str(cuotas),
+            tipo, name, uid, fecha, _frac_fmt1f(dias/30), str(cuotas),
             _frac_fmtnum(inv), _frac_fmtnum(val), _frac_fmtnum(cash_inv),
             _frac_colored(gan, signed=True), _frac_colored(rent, _frac_pct_str),
             _frac_colored(ta, _frac_pct_str), _frac_colored(tb, _frac_pct_str),
@@ -727,8 +728,8 @@ def _frac_show_comprar(data):
     def _fill_sin_apal(t, entries):
         for p in entries:
             t.add_row(
-                p["name"], p["uid"], str(p["n"]), f"{p['dias']/30:.1f}",
-                f"{p['cuotas_prom']:.1f}",
+                p["name"], p["uid"], str(p["n"]), _frac_fmt1f(p['dias']/30),
+                _frac_fmt1f(p['cuotas_prom']),
                 _frac_fmtnum(p["inv"]), _frac_fmtnum(p["val"]), _frac_fmtnum(p.get("cash_inv", 0)),
                 _frac_colored(p["gan"], signed=True), _frac_colored(p["rent"], _frac_pct_str),
                 _frac_colored(p["ta"], _frac_pct_str), _frac_colored(p["tb"], _frac_pct_str),
@@ -756,8 +757,8 @@ def _frac_show_comprar(data):
     def _fill_solo_apal(t, entries):
         for p in entries:
             t.add_row(
-                p["name"], p["uid"], str(p["n"]), f"{p['dias']/30:.1f}",
-                f"{p['cuotas_prom']:.1f}",
+                p["name"], p["uid"], str(p["n"]), _frac_fmt1f(p['dias']/30),
+                _frac_fmt1f(p['cuotas_prom']),
                 _frac_fmtnum(p["inv"]), _frac_fmtnum(p["val"]),
                 _frac_fmtnum(p.get("cash_inv")),
                 _frac_colored(p["gan"], signed=True), _frac_colored(p["rent"], _frac_pct_str),
@@ -902,7 +903,7 @@ def _frac_show_portafolio(data):
             tipo, str(d.get("n", 0)),
             _frac_fmtnum(inv), _frac_fmtnum(val), _frac_fmtnum(cash_inv),
             _frac_colored(gan, signed=True), _frac_colored(rent, _frac_pct_str),
-            f"{d['dias_prom']/30:.1f}", f"{d['cuotas_prom']:.1f}",
+            _frac_fmt1f(d['dias_prom']/30), _frac_fmt1f(d['cuotas_prom']),
             _frac_colored(_frac_calcular_tir_portafolio(d["flujos_a"]), _frac_pct_str),
             _frac_colored(_frac_calcular_tir_portafolio(d["flujos_b"]), _frac_pct_str),
             _frac_colored(_frac_calcular_tir_portafolio(d["flujos_c"]), _frac_pct_str),
@@ -917,8 +918,8 @@ def _frac_show_portafolio(data):
         f"[bold yellow]{_frac_fmtnum(data['cash_inv_total'])}[/bold yellow]",
         _frac_colored(data["gan_total"], signed=True),
         _frac_colored(data["rent_total"], _frac_pct_str),
-        f"{data['dias_prom_total']/30:.1f}",
-        f"{data['cuotas_prom_total']:.1f}",
+        _frac_fmt1f(data['dias_prom_total']/30),
+        _frac_fmt1f(data['cuotas_prom_total']),
         _frac_colored(data["tir_a_total"], _frac_pct_str),
         _frac_colored(data["tir_b_total"], _frac_pct_str),
         _frac_colored(data["tir_c_total"], _frac_pct_str),
@@ -970,7 +971,7 @@ def _frac_show_por_propiedad(data):
             f"[{accion_color}]{accion_txt}[/{accion_color}]",
             _frac_fmtnum(inv), _frac_fmtnum(val), _frac_fmtnum(cash_p),
             _frac_colored(gan, signed=True), _frac_colored(rent, _frac_pct_str),
-            f"{d['dias_prom']/30:.1f}", f"{d.get('cuotas_prom', 0):.1f}",
+            _frac_fmt1f(d['dias_prom']/30), _frac_fmt1f(d.get('cuotas_prom', 0)),
             _frac_colored(_frac_calcular_tir_portafolio(d["flujos_a"]), _frac_pct_str),
             _frac_colored(_frac_calcular_tir_portafolio(d["flujos_b"]), _frac_pct_str),
             _frac_colored(_frac_calcular_tir_portafolio(d["flujos_c"]), _frac_pct_str),
@@ -986,8 +987,8 @@ def _frac_show_por_propiedad(data):
         f"[bold yellow]{_frac_fmtnum(data['cash_inv_total'])}[/bold yellow]",
         _frac_colored(data["gan_total"], signed=True),
         _frac_colored(data["rent_total"], _frac_pct_str),
-        f"{data['dias_prom_total']/30:.1f}",
-        f"{data['cuotas_prom_total']:.1f}",
+        _frac_fmt1f(data['dias_prom_total']/30),
+        _frac_fmt1f(data['cuotas_prom_total']),
         _frac_colored(data["tir_a_total"], _frac_pct_str),
         _frac_colored(data["tir_b_total"], _frac_pct_str),
         _frac_colored(data["tir_c_total"], _frac_pct_str),
@@ -1076,7 +1077,7 @@ def _frac_show_todas_compras(data):
             name, uid, persona, pid[-14:] if len(pid) > 14 else pid,
             f"[{accion_color}]{accion_txt}[/{accion_color}]",
             f"[dim]{hold_str}[/dim]",
-            fecha, f"{dias/30:.1f}",
+            fecha, _frac_fmt1f(dias/30),
             _frac_fmtnum(inv), _frac_fmtnum(val), _frac_fmtnum(cash_inv),
             _frac_colored(gan, signed=True), _frac_colored(rent, _frac_pct_str),
             _frac_colored(ta, _frac_pct_str), _frac_colored(tb, _frac_pct_str),
