@@ -1235,6 +1235,22 @@ def _frac_menu_analizar():
         import traceback; traceback.print_exc()
         input("\nPresiona Enter para volver al menú...")
 
+def _frac_menu_principal():
+    while True:
+        _frac_opts = ["  Actualizar datos", "  Analizar datos"]
+        if _frac_menu_cuotas:
+            _frac_opts.append("  Configurar cuotas")
+        _frac_opts.append("  « Volver")
+        sub = _print_table_menu("FRACCIONAL", _frac_opts)
+        if sub == 1:
+            _frac_menu_actualizar()
+        elif sub == 2:
+            _frac_menu_analizar()
+        elif _frac_menu_cuotas and sub == 3:
+            _frac_menu_cuotas()
+        else:
+            break
+
 def _frac_menu_parametros():
     while True:
         params = _frac_get_params()
@@ -12951,8 +12967,8 @@ def main():
             bw_unlock()
             run_scraping(list(INSTITUTION_ITEMS), full_update=True)
         _SHORTCUTS = {
-            "fr":          lambda: _frac_menu_analizar(),
-            "fraccional":  lambda: _frac_menu_analizar(),
+            "fr":          lambda: _frac_menu_principal(),
+            "fraccional":  lambda: _frac_menu_principal(),
             "patrimonio":  lambda: show_last_saldos(by_category=True, pause=True),
             "p":           lambda: show_last_saldos(by_category=True, pause=True),
             "tabla":       lambda: show_last_saldos(pause=True, hide_zeros=True),
@@ -13115,23 +13131,7 @@ def main():
 
         # ── FRACCIONAL ──────────────────────────────────────────────────────
         elif top_sel == "fraccional" and _FRACCIONAL_AVAILABLE:
-            while True:
-                _frac_opts = [
-                    "  Actualizar datos",
-                    "  Analizar datos",
-                ]
-                if _frac_menu_cuotas:
-                    _frac_opts.append("  Configurar cuotas")
-                _frac_opts.append("  « Volver")
-                sub = _print_table_menu("FRACCIONAL", _frac_opts)
-                if sub == 1:
-                    _frac_menu_actualizar()
-                elif sub == 2:
-                    _frac_menu_analizar()
-                elif _frac_menu_cuotas and sub == 3:
-                    _frac_menu_cuotas()
-                else:
-                    break
+            _frac_menu_principal()
 
     except KeyboardInterrupt:
         pass
