@@ -7081,6 +7081,98 @@ def scrape_racional(context, resultados):
 _RACIONAL_PJ_STATE = Path(__file__).parent / "racional_pj_session.json"
 
 
+def _get_racional_otp_from_gmail(after_dt, timeout_s=90):
+    """Lee el OTP de Racional desde Gmail (owa605@gmail.com) vía IMAP.
+    Mismo app-password que G66, distinta cuenta y sender."""
+    import time
+
+    IMAP_HOST  = "imap.gmail.com"
+    IMAP_PORT  = 993
+    GMAIL_USER = "owa605@gmail.com"
+    GMAIL_PWD  = "zkyh ubsz uwre geov".replace(" ", "")
+
+    after_ts = time.mktime(after_dt.timetuple())
+
+    print("[RACIONAL-PJ-IMAP] Esperando 5s para que el email llegue...", flush=True)
+    time.sleep(5)
+
+    print("[RACIONAL-PJ-IMAP] Buscando OTP en Gmail...", flush=True)
+    deadline = time.time() + timeout_s
+
+    while time.time() < deadline:
+        try:
+            with imaplib.IMAP4_SSL(IMAP_HOST, IMAP_PORT) as imap:
+                imap.login(GMAIL_USER, GMAIL_PWD)
+                imap.select('"[Gmail]/All Mail"')
+
+                date_str = after_dt.strftime("%d-%b-%Y")
+                _, data  = imap.search(None, f'(FROM "racional" SINCE "{date_str}")')
+                msg_ids  = data[0].split()
+                print(f"[RACIONAL-PJ-IMAP] Emails Racional hoy: {len(msg_ids)}", flush=True)
+
+                best_code = None
+                best_ts   = 0
+                for mid in reversed(msg_ids):
+                    _, raw_data = imap.fetch(mid, "(RFC822)")
+                    raw = raw_data[0][1]
+                    msg = _email_lib.message_from_bytes(raw)
+
+                    try:
+                        date_tuple = _email_utils.parsedate_tz(msg.get("Date", ""))
+                        msg_ts = _email_utils.mktime_tz(date_tuple) if date_tuple else 0
+                    except Exception:
+                        msg_ts = 0
+
+                    if msg_ts < after_ts - 30:
+                        continue
+
+                    print(f"[RACIONAL-PJ-IMAP] Revisando: {msg.get('From')} | {msg.get('Subject')}", flush=True)
+
+                    from html.parser import HTMLParser
+                    class _StripHTML(HTMLParser):
+                        def __init__(self): super().__init__(); self._p = []
+                        def handle_data(self, d): self._p.append(d)
+                        def text(self): return ' '.join(self._p)
+
+                    raw_body = ""
+                    if msg.is_multipart():
+                        for part in msg.walk():
+                            ct = part.get_content_type()
+                            payload = part.get_payload(decode=True)
+                            if payload and ct in ("text/plain", "text/html"):
+                                raw_body += payload.decode("utf-8", errors="ignore")
+                    else:
+                        payload = msg.get_payload(decode=True)
+                        if payload:
+                            raw_body = payload.decode("utf-8", errors="ignore")
+
+                    try:
+                        stripper = _StripHTML()
+                        stripper.feed(raw_body)
+                        plain_body = stripper.text()
+                    except Exception:
+                        plain_body = re.sub(r'<[^>]+>', ' ', raw_body)
+
+                    match = re.search(r'\b(\d{6})\b', plain_body)
+                    if match and msg_ts > best_ts:
+                        best_code = match.group(1)
+                        best_ts   = msg_ts
+                        print(f"[RACIONAL-PJ-IMAP] Código candidato: {best_code}", flush=True)
+
+                if best_code:
+                    print(f"[RACIONAL-PJ-IMAP] ✅ OTP: {best_code}", flush=True)
+                    return best_code
+
+        except Exception as e:
+            print(f"[RACIONAL-PJ-IMAP] Error IMAP: {e}", flush=True)
+
+        remaining = max(0, int(deadline - time.time()))
+        print(f"[RACIONAL-PJ-IMAP] Reintentando... ({remaining}s)", flush=True)
+        time.sleep(3)
+
+    raise Exception(f"Timeout ({timeout_s}s) esperando OTP de Racional en Gmail")
+
+
 def scrape_racional_pj(context, resultados):
     """Racional PJ — Inversiones Líquidas PJ (CLP): CFIETFCD (= portafolio DtdC).
     Login: email + password en app.racional.cl. Bitwarden: item 'racional-pj'.
@@ -7125,11 +7217,38 @@ def scrape_racional_pj(context, resultados):
                     try: page.locator("text=Mantener sesi").first.click()
                     except: pass
 
+                otp_request_time = datetime.datetime.now()
                 page.get_by_role("button", name="Iniciar sesión").click()
-                print("[RACIONAL-PJ] Login enviado. ESPERANDO MFA... Complétalo en la ventana si es necesario.")
+                print("[RACIONAL-PJ] Login enviado. Esperando pantalla MFA...", flush=True)
             except Exception as e_login:
                 if DEBUG: print(f"[RACIONAL-PJ] Auto-login falló: {e_login}")
                 print("WARNING:   [RACIONAL-PJ] Inicia sesión/MFA manualmente (120s max)...")
+                otp_request_time = datetime.datetime.now()
+
+            # Detectar pantalla MFA y auto-completar OTP vía Gmail IMAP
+            try:
+                # Esperar input OTP (placeholder "123456" es el más específico)
+                _otp_sel = None
+                for _sel in ['input[placeholder="123456"]', 'input[type="tel"]',
+                              'input[type="text"][placeholder*="6"]', 'input[type="number"]']:
+                    try:
+                        page.wait_for_selector(_sel, timeout=8000)
+                        _otp_sel = _sel
+                        print(f"[RACIONAL-PJ] Selector OTP: {_sel}", flush=True)
+                        break
+                    except Exception:
+                        pass
+
+                if _otp_sel:
+                    otp_code = _get_racional_otp_from_gmail(otp_request_time, timeout_s=90)
+                    page.locator(_otp_sel).fill(otp_code)
+                    page.wait_for_timeout(500)
+                    page.get_by_role("button", name="Verificar Código").click()
+                    print(f"[RACIONAL-PJ] OTP enviado: {otp_code}", flush=True)
+                else:
+                    print("WARNING: [RACIONAL-PJ] No se encontró input OTP — esperando acción manual (60s)...", flush=True)
+            except Exception as e_mfa:
+                print(f"WARNING: [RACIONAL-PJ] MFA automático falló: {e_mfa}. Esperando manual (60s)...", flush=True)
 
             try:
                 page.wait_for_url(lambda url: all(x not in url.lower() for x in ["login", "mfa", "verify"]), timeout=120000)
