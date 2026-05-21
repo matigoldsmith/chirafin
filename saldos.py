@@ -7225,30 +7225,34 @@ def scrape_racional_pj(context, resultados):
                 print("WARNING:   [RACIONAL-PJ] Inicia sesión/MFA manualmente (120s max)...")
                 otp_request_time = datetime.datetime.now()
 
-            # Detectar pantalla MFA y auto-completar OTP vía Gmail IMAP
-            try:
-                # Esperar input OTP (placeholder "123456" es el más específico)
-                _otp_sel = None
-                for _sel in ['input[placeholder="123456"]', 'input[type="tel"]',
-                              'input[type="text"][placeholder*="6"]', 'input[type="number"]']:
-                    try:
-                        page.wait_for_selector(_sel, timeout=8000)
-                        _otp_sel = _sel
-                        print(f"[RACIONAL-PJ] Selector OTP: {_sel}", flush=True)
-                        break
-                    except Exception:
-                        pass
+            # Detectar si hay pantalla MFA (esperar 3s y chequear URL antes de buscar OTP)
+            page.wait_for_timeout(3000)
+            _needs_mfa = any(x in page.url.lower() for x in ["mfa", "verify", "verificar", "login"])
+            if _needs_mfa:
+                try:
+                    _otp_sel = None
+                    for _sel in ['input[placeholder="123456"]', 'input[type="tel"]',
+                                  'input[type="text"][placeholder*="6"]', 'input[type="number"]']:
+                        try:
+                            page.wait_for_selector(_sel, timeout=5000)
+                            _otp_sel = _sel
+                            print(f"[RACIONAL-PJ] Selector OTP: {_sel}", flush=True)
+                            break
+                        except Exception:
+                            pass
 
-                if _otp_sel:
-                    otp_code = _get_racional_otp_from_gmail(otp_request_time, timeout_s=90)
-                    page.locator(_otp_sel).fill(otp_code)
-                    page.wait_for_timeout(500)
-                    page.get_by_role("button", name="Verificar Código").click()
-                    print(f"[RACIONAL-PJ] OTP enviado: {otp_code}", flush=True)
-                else:
-                    print("WARNING: [RACIONAL-PJ] No se encontró input OTP — esperando acción manual (60s)...", flush=True)
-            except Exception as e_mfa:
-                print(f"WARNING: [RACIONAL-PJ] MFA automático falló: {e_mfa}. Esperando manual (60s)...", flush=True)
+                    if _otp_sel:
+                        otp_code = _get_racional_otp_from_gmail(otp_request_time, timeout_s=90)
+                        page.locator(_otp_sel).fill(otp_code)
+                        page.wait_for_timeout(500)
+                        page.get_by_role("button", name="Verificar Código").click()
+                        print(f"[RACIONAL-PJ] OTP enviado: {otp_code}", flush=True)
+                    else:
+                        print("WARNING: [RACIONAL-PJ] No se encontró input OTP — esperando acción manual (60s)...", flush=True)
+                except Exception as e_mfa:
+                    print(f"WARNING: [RACIONAL-PJ] MFA automático falló: {e_mfa}. Esperando manual (60s)...", flush=True)
+            else:
+                print("[RACIONAL-PJ] Sin MFA — login directo a home.", flush=True)
 
             try:
                 page.wait_for_url(lambda url: all(x not in url.lower() for x in ["login", "mfa", "verify"]), timeout=120000)
