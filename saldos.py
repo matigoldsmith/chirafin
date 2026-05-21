@@ -7078,6 +7078,106 @@ def scrape_racional(context, resultados):
             except: pass
 
 
+_RACIONAL_PJ_STATE = Path(__file__).parent / "racional_pj_session.json"
+
+
+def scrape_racional_pj(context, resultados):
+    """Racional PJ — Inversiones Líquidas PJ (CLP): CFIETFCD (= portafolio DtdC).
+    Login: email + password en app.racional.cl. Bitwarden: item 'racional-pj'.
+    Persistencia vía racional_pj_session.json. Lógica idéntica a scrape_racional (PN)."""
+    key         = "racional_pj"
+    iso_context = None
+    page        = None
+    try:
+        username = bw_get("username", "racional-pj")
+        password = bw_get("password", "racional-pj")
+        if not username or not password:
+            add_result(resultados, key, "Racional PJ", "Inversiones Líquidas PJ", "CFIETFCD", "error", ok=False)
+            print_preliminary("Racional PJ", "Inversiones Líquidas PJ", "CFIETFCD", "Sin credenciales", ok=False)
+            return False
+
+        ctx_kwargs = {"viewport": {"width": 1600, "height": 900}}
+        if _RACIONAL_PJ_STATE.exists():
+            ctx_kwargs["storage_state"] = str(_RACIONAL_PJ_STATE)
+            if DEBUG: print(f"[RACIONAL-PJ] Cargando sesión guardada: {_RACIONAL_PJ_STATE}")
+
+        iso_context = context.browser.new_context(**ctx_kwargs)
+        iso_context.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+        page = iso_context.new_page()
+
+        page.goto("https://app.racional.cl", timeout=60000)
+        page.wait_for_timeout(3000)
+
+        if "login" in page.url:
+            if DEBUG: print("[RACIONAL-PJ] Sesión inválida, procediendo a login...")
+            try:
+                page.locator("input[type='email']").wait_for(state="visible", timeout=12000)
+                page.locator("input[type='email']").fill(username)
+                page.wait_for_timeout(400)
+                page.locator("input[type='password']").fill(password)
+                page.wait_for_timeout(400)
+
+                try:
+                    cb = page.locator("input[type='checkbox']").first
+                    if not cb.is_checked():
+                        cb.check(force=True)
+                except:
+                    try: page.locator("text=Mantener sesi").first.click()
+                    except: pass
+
+                page.get_by_role("button", name="Iniciar sesión").click()
+                print("[RACIONAL-PJ] Login enviado. ESPERANDO MFA... Complétalo en la ventana si es necesario.")
+            except Exception as e_login:
+                if DEBUG: print(f"[RACIONAL-PJ] Auto-login falló: {e_login}")
+                print("WARNING:   [RACIONAL-PJ] Inicia sesión/MFA manualmente (120s max)...")
+
+            try:
+                page.wait_for_url(lambda url: all(x not in url.lower() for x in ["login", "mfa", "verify"]), timeout=120000)
+                page.wait_for_timeout(5000)
+                iso_context.storage_state(path=str(_RACIONAL_PJ_STATE))
+            except:
+                print("WARNING:  [RACIONAL-PJ] Tiempo de espera MFA agotado o URL inesperada.")
+
+        if "/tabs/home" not in page.url:
+            page.goto("https://app.racional.cl/tabs/home", timeout=30000)
+        page.wait_for_load_state("load", timeout=20000)
+        page.wait_for_timeout(3000)
+        page.wait_for_selector(".investment-amount", timeout=30000)
+        page.wait_for_timeout(1000)
+        raw_val = page.locator(".investment-amount").first.text_content()
+        raw_val = (raw_val or "").strip()
+
+        if raw_val:
+            raw_val_clean = raw_val.lstrip("$").strip()
+            base_int = int(float(clean_monto(raw_val_clean, "CLP")))
+            extra = _racional_get_en_progreso_extra(page)
+            total_int = base_int + extra
+            if extra:
+                print(f"[RACIONAL-PJ] Saldo base {base_int:,} + en progreso {extra:,} = {total_int:,}", flush=True)
+            add_result(resultados, key, "Racional PJ", "Inversiones Líquidas PJ", "CFIETFCD", total_int)
+            print_preliminary("Racional PJ", "Inversiones Líquidas PJ", "CFIETFCD", fmt_monto(total_int))
+        else:
+            if DEBUG: print("[RACIONAL-PJ] No se encontró .investment-amount en la página")
+            add_result(resultados, key, "Racional PJ", "Inversiones Líquidas PJ", "CFIETFCD", "error", ok=False)
+            print_preliminary("Racional PJ", "Inversiones Líquidas PJ", "CFIETFCD", "No obtenido", ok=False)
+            return False
+
+        return True
+
+    except Exception as e:
+        if DEBUG: print(f"[RACIONAL-PJ] Error general: {e}")
+        add_result(resultados, key, "Racional PJ", "Inversiones Líquidas PJ", "CFIETFCD", "error", ok=False)
+        print_preliminary("Racional PJ", "Inversiones Líquidas PJ", "CFIETFCD", str(e)[:60], ok=False)
+        return False
+    finally:
+        if page:
+            try: page.close()
+            except: pass
+        if iso_context:
+            try: iso_context.close()
+            except: pass
+
+
 _WEALTHFRONT_STATE = Path(__file__).parent / "wealthfront_session.json"
 
 def scrape_wealthfront(context, resultados):
@@ -8584,6 +8684,7 @@ INSTITUTION_ITEMS = [
     # ── Persona Jurídica (PJ) — orden alfabético ─────────────
     ("BTG Pactual",         "btg_pj",         scrape_btg_pj,        [("CFISP500", "Inversiones Líquidas PJ"), ("CFINASDAQ", "Inversiones Líquidas PJ"), ("CFIETFGE", "Inversiones Líquidas PJ")]),
     ("Fintual",              "fintual_pj",     scrape_fintual_pj,    [("Risky Norris", "Inversiones Líquidas PJ"), ("Cash Owa", "Inversiones Líquidas PJ"), ("Retiro Pendiente", "Inversiones Líquidas PJ")]),
+    ("Racional PJ",          "racional_pj",    scrape_racional_pj,   [("CFIETFCD", "Inversiones Líquidas PJ")]),
     ("Fraccional",          "fraccional_pj",  scrape_fraccional_pj, [("Fraccional", "Fondos Inmobiliarios PJ")]),
     ("Itaú PJ",               "itau_pj",        scrape_itau_pj,       [("CC 5735", "CC PJ")]),
     ("Scotiabank",          "scotiabank_pj",  scrape_scotiabank_pj, [("CC 7381", "CC PJ")]),
@@ -13100,6 +13201,7 @@ def show_caja():
     SHORT_TERM_INVESTMENTS = {
         ("Neat", "Neat"),
         ("Racional", "CFIETFCD"),
+        ("Racional PJ", "CFIETFCD"),
         ("Fraccional", "Fraccional"),
         ("Itaú PJ", "CFIETFCD"),
         ("Fintual", "Cash Owa"),
