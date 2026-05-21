@@ -6982,8 +6982,8 @@ def scrape_racional(context, resultados):
         username = bw_get("username", "racional-prod.firebaseapp.com")
         password = bw_get("password", "racional-prod.firebaseapp.com")
         if not username or not password:
-            add_result(resultados, key, "Racional", "Inversiones Líquidas", "CFIETFCD", "error", ok=False)
-            print_preliminary("Racional", "Inversiones Líquidas", "CFIETFCD", "Sin credenciales", ok=False)
+            add_result(resultados, key, "Racional PN", "Inversiones Líquidas", "CFIETFCD", "error", ok=False)
+            print_preliminary("Racional PN", "Inversiones Líquidas", "CFIETFCD", "Sin credenciales", ok=False)
             return False
 
         # ── Contexto aislado para persistencia ──
@@ -7054,20 +7054,20 @@ def scrape_racional(context, resultados):
             total_int = base_int + extra
             if extra:
                 print(f"[RACIONAL] Saldo base {base_int:,} + en progreso {extra:,} = {total_int:,}", flush=True)
-            add_result(resultados, key, "Racional", "Inversiones Líquidas", "CFIETFCD", total_int)
-            print_preliminary("Racional", "Inversiones Líquidas", "CFIETFCD", fmt_monto(total_int))
+            add_result(resultados, key, "Racional PN", "Inversiones Líquidas", "CFIETFCD", total_int)
+            print_preliminary("Racional PN", "Inversiones Líquidas", "CFIETFCD", fmt_monto(total_int))
         else:
             if DEBUG: print("[RACIONAL] No se encontró .investment-amount en la página")
-            add_result(resultados, key, "Racional", "Inversiones Líquidas", "CFIETFCD", "error", ok=False)
-            print_preliminary("Racional", "Inversiones Líquidas", "CFIETFCD", "No obtenido", ok=False)
+            add_result(resultados, key, "Racional PN", "Inversiones Líquidas", "CFIETFCD", "error", ok=False)
+            print_preliminary("Racional PN", "Inversiones Líquidas", "CFIETFCD", "No obtenido", ok=False)
             return False
 
         return True
 
     except Exception as e:
         if DEBUG: print(f"[RACIONAL] Error general: {e}")
-        add_result(resultados, key, "Racional", "Inversiones Líquidas", "CFIETFCD", "error", ok=False)
-        print_preliminary("Racional", "Inversiones Líquidas", "CFIETFCD", str(e)[:60], ok=False)
+        add_result(resultados, key, "Racional PN", "Inversiones Líquidas", "CFIETFCD", "error", ok=False)
+        print_preliminary("Racional PN", "Inversiones Líquidas", "CFIETFCD", str(e)[:60], ok=False)
         return False
     finally:
         if page:
@@ -8674,7 +8674,7 @@ INSTITUTION_ITEMS = [
     ("Fraccional",           "fraccional",     scrape_fraccional,    [("Fraccional", "Fondos Inmobiliarios")]),
     ("Harvard FCU",          "harvard",        scrape_harvard,       [("Checking 5440", "Cash"), ("Savings 5400", "Cash")]),
     ("Neat",                 "neat",           scrape_neat,          [("Neat", "Cash")]),
-    ("Racional",             "racional",       scrape_racional,      [("CFIETFCD", "Inversiones Líquidas")]),
+    ("Racional PN",          "racional",       scrape_racional,      [("CFIETFCD", "Inversiones Líquidas")]),
     ("Consorcio",           "consorcio",      scrape_consorcio,     [("CC 6758", "CC PN"), ("LdC", "LdC"), ("CH Taihuén", "CH")]),
     ("Itaú",                "itau",           scrape_itau,          [("CC 8792", "CC PN"), ("TdC 6132", "TdC"), ("LdC", "LdC"), ("CH Cívico", "CH")]),
     ("Santander",           "santander",      scrape_santander,     [("CC 2241", "CC PN"), ("TdC 4765", "TdC"), ("TdC 8098", "TdC"), ("LdC", "LdC")]),
@@ -13200,7 +13200,7 @@ def show_caja():
     # Identificadores precisos según definición del usuario (fondos líquidos considerados corto plazo)
     SHORT_TERM_INVESTMENTS = {
         ("Neat", "Neat"),
-        ("Racional", "CFIETFCD"),
+        ("Racional PN", "CFIETFCD"),
         ("Racional PJ", "CFIETFCD"),
         ("Fraccional", "Fraccional"),
         ("Itaú PJ", "CFIETFCD"),
