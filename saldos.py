@@ -7089,7 +7089,7 @@ def _get_racional_otp_from_gmail(after_dt, timeout_s=90):
     IMAP_HOST  = "imap.gmail.com"
     IMAP_PORT  = 993
     GMAIL_USER = "owa605@gmail.com"
-    GMAIL_PWD  = "zkyh ubsz uwre geov".replace(" ", "")
+    GMAIL_PWD  = "xaujycsydvtmjflh"
 
     after_ts = time.mktime(after_dt.timetuple())
 
