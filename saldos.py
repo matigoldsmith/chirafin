@@ -30,6 +30,8 @@ from rich.text import Text
 from rich.panel import Panel
 from rich.rule import Rule
 from rich import box as rich_box
+# Box para tablas de análisis Fraccional: igual que SIMPLE_HEAVY pero con separador de sección visible (━)
+_FRAC_BOX = rich_box.Box("    \n    \n ━  \n    \n ━  \n    \n    \n    \n", ascii=False)
 import json
 import threading
 import urllib.request
@@ -130,7 +132,7 @@ def _frac_colored(v, fmt_fn=None, signed=False):
     c = "green" if v >= 0 else "red"
     return f"[{c}]{s}[/{c}]"
 
-_frac_pct_str = lambda v: f"{v:+.0f}%" if abs(v) >= 100 else f"{v:+.1f}%".replace(".", ",")
+_frac_pct_str = lambda v: f"{v:+.0f}%" if abs(v) >= 10 else f"{v:+.1f}%".replace(".", ",")
 _frac_fmt1f   = lambda v: f"{v:.1f}".replace(".", ",")
 
 # ─── XIRR (Newton-Raphson) ───────────────────────────────────────────────────
@@ -388,7 +390,7 @@ def _frac_compute_analysis(conn, tasa_dap, premium, max_meses, espera_max=18):
     }
     totales_por_propiedad = _frac_defaultdict(lambda: {
         "inv": 0.0, "val": 0.0, "cash_inv": 0.0, "dias_ponderado": 0.0,
-        "peso_inv": 0.0, "cuotas_ponderado": 0.0, "n": 0,
+        "peso_inv": 0.0, "cuotas_ponderado": 0.0, "n": 0, "n_pn": 0, "n_pj": 0,
         "flujos_a": [], "flujos_b": [], "flujos_c": [], "flujos_d": [], "name": ""
     })
 
@@ -505,6 +507,7 @@ def _frac_compute_analysis(conn, tasa_dap, premium, max_meses, espera_max=18):
         totales_por_propiedad[unit_id]["cuotas_ponderado"] += cuotas_reales * _cash
         totales_por_propiedad[unit_id]["peso_inv"]         += _cash
         totales_por_propiedad[unit_id]["n"]                += 1
+        totales_por_propiedad[unit_id]["n_pn" if persona == "PN" else "n_pj"] += 1
         totales_por_propiedad[unit_id]["name"]              = unit_name
 
     for tp in totales_por_tipo:
@@ -593,6 +596,8 @@ def _frac_compute_analysis(conn, tasa_dap, premium, max_meses, espera_max=18):
         "tir_b_total": _frac_calcular_tir_portafolio(flujos_b_tot),
         "tir_c_total": _frac_calcular_tir_portafolio(flujos_c_tot),
         "tir_d_total": _frac_calcular_tir_portafolio(flujos_d_tot),
+        "flujos_a_tot": flujos_a_tot, "flujos_b_tot": flujos_b_tot,
+        "flujos_c_tot": flujos_c_tot, "flujos_d_tot": flujos_d_tot,
         "prop_compra_sin_apal": prop_compra_sin_apal,
         "prop_compra_solo_apal": prop_compra_solo_apal,
     }
@@ -873,10 +878,95 @@ def _frac_show_mantener(data):
     _frac_add_total_purchase(t, filas, show_hold=True)
     _console.print(t)
 
-def _frac_show_portafolio(data):
+def _frac_load_sold_data(conn):
+    """Carga propiedades vendidas para integrar al pie del resumen."""
+    import datetime as _dt, re as _re
+    def _pd(s):
+        if not s: return None
+        s = s.replace("Z", "+00:00")
+        s = _re.sub(r'(\.\d{1,5})(?=[+-]|$)', lambda m: m.group(1).ljust(7,'0'), s)
+        try:    return _dt.datetime.fromisoformat(s).date()
+        except: return _dt.date.fromisoformat(s[:10])
+
+    rows = conn.execute(f"""
+        WITH latest AS (
+            SELECT purchase_confirmation_id, persona, MAX(extracted_at) AS max_ts
+            FROM {_FRAC_TABLE} WHERE status='sold' GROUP BY purchase_confirmation_id, persona
+        )
+        SELECT m.purchase_confirmation_id AS pid, m.persona, m.unit_id, m.unit_name,
+               m.confirmed_at, m.amend_sold_at AS exit_at,
+               MAX(m.bid_preferred_amount_fee)                            AS comision,
+               MAX(m.bid_preferred_amount)+MAX(m.bid_preferred_amount_fee) AS capital,
+               MAX(m.bid_amount)                                           AS recibido
+        FROM {_FRAC_TABLE} m
+        JOIN latest l ON m.purchase_confirmation_id=l.purchase_confirmation_id
+                      AND m.persona=l.persona AND m.extracted_at=l.max_ts
+        WHERE m.status='sold' AND m.kind IN ('purchase','market')
+        GROUP BY m.purchase_confirmation_id, m.persona, m.unit_id, m.unit_name,
+                 m.confirmed_at, m.amend_sold_at
+    """).fetchall()
+
+    from collections import defaultdict
+    by_prop    = defaultdict(lambda: {"name":"","n":0,"n_pn":0,"n_pj":0,
+                                      "inv":0.,"sc":0.,"rec":0.,"fa":[],"fb":[],"dias":[]})
+    by_persona = defaultdict(lambda: {"n":0,"inv":0.,"sc":0.,"rec":0.,"fa":[],"fb":[]})
+
+    for r in rows:
+        cap = r["capital"] or 0.; com = r["comision"] or 0.
+        sc  = cap - com;           rec = r["recibido"] or 0.
+        conf = _pd(r["confirmed_at"]); exit_ = _pd(r["exit_at"])
+        if not conf or not exit_: continue
+        uid, per = r["unit_id"], r["persona"]
+        by_prop[uid]["name"] = r["unit_name"]
+        by_prop[uid]["n"]   += 1
+        by_prop[uid]["n_pn" if per == "PN" else "n_pj"] += 1
+        by_prop[uid]["inv"] += cap; by_prop[uid]["sc"] += sc; by_prop[uid]["rec"] += rec
+        by_prop[uid]["fa"]  += [(conf, -cap), (exit_, rec)]
+        by_prop[uid]["fb"]  += [(conf, -sc),  (exit_, rec)]
+        by_prop[uid]["dias"].append((exit_ - conf).days)
+        by_persona[per]["n"]   += 1
+        by_persona[per]["inv"] += cap; by_persona[per]["sc"] += sc; by_persona[per]["rec"] += rec
+        by_persona[per]["fa"]  += [(conf, -cap), (exit_, rec)]
+        by_persona[per]["fb"]  += [(conf, -sc),  (exit_, rec)]
+
+    def _t(f): return _frac_calcular_tir_portafolio(f)
+
+    props = []
+    for uid, d in by_prop.items():
+        gan  = d["rec"] - d["inv"]
+        rent = (gan / d["inv"] * 100) if d["inv"] else None
+        ta   = _t(d["fa"]); tb = _t(d["fb"])
+        meses = (sum(d["dias"]) / len(d["dias"]) / 30.4) if d["dias"] else 0.
+        props.append({"uid":uid,"name":d["name"],"n":d["n"],
+                      "n_pn":d["n_pn"],"n_pj":d["n_pj"],
+                      "inv":d["inv"],"rec":d["rec"],"gan":gan,"rent":rent,
+                      "meses":meses,"ta":ta,"tb":tb})
+    props.sort(key=lambda x: x["tb"] or -999, reverse=True)
+
+    all_fa = [f for d in by_prop.values() for f in d["fa"]]
+    all_fb = [f for d in by_prop.values() for f in d["fb"]]
+    tot_inv = sum(d["inv"] for d in by_prop.values())
+    tot_rec = sum(d["rec"] for d in by_prop.values())
+    tot_gan = tot_rec - tot_inv
+    tot_meses = (sum(p["meses"] * p["inv"] for p in props) / tot_inv) if tot_inv else 0.
+    return {
+        "props": props,
+        "by_persona": dict(by_persona),
+        "tot": {"n": sum(d["n"] for d in by_prop.values()),
+                "n_pn": sum(d.get("n_pn",0) for d in by_prop.values()),
+                "n_pj": sum(d.get("n_pj",0) for d in by_prop.values()),
+                "inv": tot_inv, "rec": tot_rec, "gan": tot_gan,
+                "rent": (tot_gan/tot_inv*100) if tot_inv else None,
+                "meses_prom": tot_meses,
+                "ta": _t(all_fa), "tb": _t(all_fb),
+                "fa": all_fa, "fb": all_fb},
+    }
+
+
+def _frac_show_portafolio(data, sold=None):
     totales_por_tipo = data["totales_por_tipo"]
     _console.print("\n[bold orange1]Portafolio  (PN · PJ · Total)[/bold orange1]\n")
-    t = Table(box=rich_box.SIMPLE_HEAVY, show_header=True, header_style="bold orange1")
+    t = Table(box=_FRAC_BOX, show_header=True, header_style="bold orange1")
     t.add_column("Tipo",                 style="dim",    width=6)
     t.add_column("#\ncompras",           justify="right", style="dim",    width=7)
     t.add_column("Inversión\nnominal",   justify="right", style="cyan",   width=13)
@@ -925,9 +1015,58 @@ def _frac_show_portafolio(data):
         _frac_colored(data["tir_c_total"], _frac_pct_str),
         _frac_colored(data["tir_d_total"], _frac_pct_str),
     )
+    # ── Sección "Fuera del portafolio" ───────────────────────────────────────
+    if sold and sold["props"]:
+        t.add_row(*[""] * 13)
+        t.add_section()
+        _t = lambda f: _frac_colored(_frac_calcular_tir_portafolio(f), _frac_pct_str)
+        for per in ("PN", "PJ"):
+            d = sold["by_persona"].get(per)
+            if not d or not d["n"]: continue
+            gan = d["rec"] - d["inv"]
+            rent = (gan / d["inv"] * 100) if d["inv"] else None
+            ta = _frac_calcular_tir_portafolio(d["fa"]); tb = _frac_calcular_tir_portafolio(d["fb"])
+            t.add_row(
+                f"[dim]{per} vendido[/dim]", f"[dim]{d['n']}[/dim]",
+                f"[dim]{_frac_fmtnum(d['inv'])}[/dim]",
+                f"[dim]{_frac_fmtnum(d['rec'])}[/dim]",
+                f"[dim]{_frac_fmtnum(d['inv'])}[/dim]",
+                _frac_colored(gan, signed=True), _frac_colored(rent, _frac_pct_str),
+                "[dim]—[/dim]", "[dim]—[/dim]",
+                _frac_colored(ta, _frac_pct_str), _frac_colored(tb, _frac_pct_str),
+                _frac_colored(ta, _frac_pct_str), _frac_colored(tb, _frac_pct_str),
+            )
+        s = sold["tot"]
+        t.add_row(*[""] * 13)
+        t.add_section()
+        t.add_row(
+            "[dim]Subtotal vendido[/dim]", f"[dim]{s['n']}[/dim]",
+            f"[dim]{_frac_fmtnum(s['inv'])}[/dim]",
+            f"[dim]{_frac_fmtnum(s['rec'])}[/dim]",
+            f"[dim]{_frac_fmtnum(s['inv'])}[/dim]",
+            _frac_colored(s["gan"], signed=True), _frac_colored(s["rent"], _frac_pct_str),
+            "[dim]—[/dim]", "[dim]—[/dim]",
+            _frac_colored(s["ta"], _frac_pct_str), _frac_colored(s["tb"], _frac_pct_str),
+            _frac_colored(s["ta"], _frac_pct_str), _frac_colored(s["tb"], _frac_pct_str),
+        )
+        t.add_row(*[""] * 13)
+        t.add_section()
+        g_inv  = data["inv_total"]  + s["inv"]
+        g_rec  = data["val_total"]  + s["rec"]
+        g_gan  = data["gan_total"]  + s["gan"]
+        g_cash = data["cash_inv_total"] + s["inv"]
+        g_rent = (g_gan / g_cash * 100) if g_cash else None
+        t.add_row(
+            "[bold]TOTAL GENERAL[/bold]", f"[bold]{n_total + s['n']}[/bold]",
+            f"[bold cyan]{_frac_fmtnum(g_inv)}[/bold cyan]",
+            f"[bold green]{_frac_fmtnum(g_rec)}[/bold green]",
+            f"[bold yellow]{_frac_fmtnum(g_cash)}[/bold yellow]",
+            _frac_colored(g_gan, signed=True), _frac_colored(g_rent, _frac_pct_str),
+            "", "", "", "", "", "",
+        )
     _console.print(t)
 
-def _frac_show_por_propiedad(data):
+def _frac_show_por_propiedad(data, sold=None):
     totales_por_propiedad = data["totales_por_propiedad"]
     tasa_dap       = data["tasa_dap"]
     umbral         = data["umbral"]
@@ -936,10 +1075,11 @@ def _frac_show_por_propiedad(data):
     espera_max     = data.get("espera_max", 18)
     today          = datetime.date.today()
     _console.print("\n[bold orange1]Por propiedad  (PN + PJ)[/bold orange1]\n")
-    t = Table(box=rich_box.SIMPLE_HEAVY, show_header=True, header_style="bold orange1")
+    t = Table(box=_FRAC_BOX, show_header=True, header_style="bold orange1")
     t.add_column("Propiedad",            style="white", max_width=35, overflow="ellipsis", no_wrap=True)
     t.add_column("ID",                   style="dim",   width=6, overflow="ellipsis")
-    t.add_column("#\ncompras",           justify="right", style="dim", width=7)
+    t.add_column("#\nPN",                justify="right", style="dim", width=5)
+    t.add_column("#\nPJ",                justify="right", style="dim", width=5)
     t.add_column("Acción",               justify="left", width=18)
     t.add_column("Inversión\nnominal",   justify="right", style="cyan",   width=13)
     t.add_column("Valor\nactual",        justify="right", style="green",  width=13)
@@ -967,7 +1107,9 @@ def _frac_show_por_propiedad(data):
             d, tasa_dap, umbral, commission_rate, max_meses, today, espera_max=espera_max
         )
         t.add_row(
-            d["name"], uid, str(d.get("n", 0)),
+            d["name"], uid,
+            str(d.get("n_pn", 0)) if d.get("n_pn") else "[dim]—[/dim]",
+            str(d.get("n_pj", 0)) if d.get("n_pj") else "[dim]—[/dim]",
             f"[{accion_color}]{accion_txt}[/{accion_color}]",
             _frac_fmtnum(inv), _frac_fmtnum(val), _frac_fmtnum(cash_p),
             _frac_colored(gan, signed=True), _frac_colored(rent, _frac_pct_str),
@@ -977,11 +1119,10 @@ def _frac_show_por_propiedad(data):
             _frac_colored(_frac_calcular_tir_portafolio(d["flujos_c"]), _frac_pct_str),
             _frac_colored(_frac_calcular_tir_portafolio(d["flujos_d"]), _frac_pct_str),
         )
-    t.add_row(*[""] * 15)
     t.add_section()
     n_prop_total = sum(d.get("n", 0) for d in totales_por_propiedad.values())
     t.add_row(
-        "[bold]TOTAL[/bold]", "", str(n_prop_total), "",
+        "[bold]Total portafolio activo[/bold]", "", "", "", "",
         f"[bold cyan]{_frac_fmtnum(data['inv_total'])}[/bold cyan]",
         f"[bold green]{_frac_fmtnum(data['val_total'])}[/bold green]",
         f"[bold yellow]{_frac_fmtnum(data['cash_inv_total'])}[/bold yellow]",
@@ -994,6 +1135,65 @@ def _frac_show_por_propiedad(data):
         _frac_colored(data["tir_c_total"], _frac_pct_str),
         _frac_colored(data["tir_d_total"], _frac_pct_str),
     )
+    # ── Sección "Fuera del portafolio" ───────────────────────────────────────
+    if sold and sold["props"]:
+        t.add_section()
+        for p in sold["props"]:
+            n_pn_s = str(p["n_pn"]) if p.get("n_pn") else "[dim]—[/dim]"
+            n_pj_s = str(p["n_pj"]) if p.get("n_pj") else "[dim]—[/dim]"
+            t.add_row(
+                f"[dim]{p['name']}[/dim]", f"[dim]{p['uid']}[/dim]",
+                f"[dim]{n_pn_s}[/dim]", f"[dim]{n_pj_s}[/dim]", "[dim]Vendido[/dim]",
+                f"[dim]{_frac_fmtnum(p['inv'])}[/dim]",
+                f"[dim]{_frac_fmtnum(p['rec'])}[/dim]",
+                f"[dim]{_frac_fmtnum(p['inv'])}[/dim]",
+                _frac_colored(p["gan"], signed=True),
+                _frac_colored(p["rent"], _frac_pct_str),
+                f"[dim]{_frac_fmt1f(p['meses'])}[/dim]", "[dim]1[/dim]",
+                _frac_colored(p["ta"], _frac_pct_str),
+                _frac_colored(p["tb"], _frac_pct_str),
+                _frac_colored(p["ta"], _frac_pct_str),
+                _frac_colored(p["tb"], _frac_pct_str),
+            )
+        s = sold["tot"]
+        t.add_section()
+        t.add_row(
+            "[bold]Total realizado[/bold]",
+            "", str(s["n_pn"]) if s.get("n_pn") else "", str(s["n_pj"]) if s.get("n_pj") else "", "",
+            f"[bold cyan]{_frac_fmtnum(s['inv'])}[/bold cyan]",
+            f"[bold green]{_frac_fmtnum(s['rec'])}[/bold green]",
+            f"[bold yellow]{_frac_fmtnum(s['inv'])}[/bold yellow]",
+            _frac_colored(s["gan"], signed=True), _frac_colored(s["rent"], _frac_pct_str),
+            f"[bold]{_frac_fmt1f(s['meses_prom'])}[/bold]", "[bold]1[/bold]",
+            _frac_colored(s["ta"], _frac_pct_str), _frac_colored(s["tb"], _frac_pct_str),
+            _frac_colored(s["ta"], _frac_pct_str), _frac_colored(s["tb"], _frac_pct_str),
+        )
+        t.add_section()
+        g_inv  = data["inv_total"]      + s["inv"]
+        g_rec  = data["val_total"]      + s["rec"]
+        g_gan  = data["gan_total"]      + s["gan"]
+        g_cash = data["cash_inv_total"] + s["inv"]
+        g_rent = (g_gan / g_cash * 100) if g_cash else None
+        # meses y cuotas ponderados por inversión
+        g_meses = ((data["dias_prom_total"] / 30.4 * data["inv_total"]) +
+                   (s["meses_prom"] * s["inv"])) / g_inv if g_inv else 0.
+        g_cuotas = ((data["cuotas_prom_total"] * data["inv_total"]) +
+                    (1.0 * s["inv"])) / g_inv if g_inv else 0.
+        # TIR general = flujos activos + flujos sold combinados
+        g_fa = data["flujos_a_tot"] + s["fa"]
+        g_fb = data["flujos_b_tot"] + s["fb"]
+        g_ta = _frac_calcular_tir_portafolio(g_fa)
+        g_tb = _frac_calcular_tir_portafolio(g_fb)
+        t.add_row(
+            "[bold]Total general[/bold]", "", "", "", "",
+            f"[bold cyan]{_frac_fmtnum(g_inv)}[/bold cyan]",
+            f"[bold green]{_frac_fmtnum(g_rec)}[/bold green]",
+            f"[bold yellow]{_frac_fmtnum(g_cash)}[/bold yellow]",
+            _frac_colored(g_gan, signed=True), _frac_colored(g_rent, _frac_pct_str),
+            f"[bold]{_frac_fmt1f(g_meses)}[/bold]", f"[bold]{_frac_fmt1f(g_cuotas)}[/bold]",
+            _frac_colored(g_ta, _frac_pct_str), _frac_colored(g_tb, _frac_pct_str),
+            _frac_colored(g_ta, _frac_pct_str), _frac_colored(g_tb, _frac_pct_str),
+        )
     _console.print(t)
     _leyenda = Table(box=None, show_header=False, padding=(0, 2, 0, 2))
     _leyenda.add_column("accion", no_wrap=True, min_width=20)
@@ -1042,8 +1242,8 @@ def _frac_show_todas_compras(data):
     todas.sort(key=_sort_key)
 
     _console.print("\n[bold orange1]Todas las compras  (peor → mejor TIR B)[/bold orange1]\n")
-    t = Table(box=rich_box.SIMPLE_HEAVY, show_header=True, header_style="bold orange1")
-    t.add_column("Propiedad",            style="white", max_width=35, overflow="ellipsis", no_wrap=True)
+    t = Table(box=_FRAC_BOX, show_header=True, header_style="bold orange1")
+    t.add_column("Propiedad",            style="white", max_width=25, overflow="ellipsis", no_wrap=True)
     t.add_column("ID",                   style="dim",   width=6, overflow="ellipsis")
     t.add_column("P.",                   style="dim",   width=3)
     t.add_column("Purchase ID",          style="dim",   max_width=14, overflow="ellipsis", no_wrap=True)
@@ -1051,6 +1251,7 @@ def _frac_show_todas_compras(data):
     t.add_column("Hold\n(meses)",        justify="right", style="dim", width=7)
     t.add_column("Fecha",                style="dim",   width=10)
     t.add_column("Meses",                justify="right", style="dim", width=5)
+    t.add_column("Cuotas",               justify="right", style="dim", width=7)
     t.add_column("Inversión\nnominal",   justify="right", style="cyan",   width=13)
     t.add_column("Valor\nactual",        justify="right", style="green",  width=13)
     t.add_column("Cash\ninvertido",      justify="right", style="yellow", width=11)
@@ -1067,6 +1268,8 @@ def _frac_show_todas_compras(data):
         accion_txt, accion_color = _accion_compra(grupo, hold_m)
         if grupo in ("vender_malo", "vender_bajo_dap"):
             hold_str = "[dim]n/a[/dim]"
+        elif grupo == "esperar":
+            hold_str = "[dim]—[/dim]"
         elif hold_m is None:
             hold_str = "[dim]>18m[/dim]"
         elif hold_m == 0:
@@ -1077,7 +1280,7 @@ def _frac_show_todas_compras(data):
             name, uid, persona, pid[-14:] if len(pid) > 14 else pid,
             f"[{accion_color}]{accion_txt}[/{accion_color}]",
             f"[dim]{hold_str}[/dim]",
-            fecha, _frac_fmt1f(dias/30),
+            fecha, _frac_fmt1f(dias/30), str(cuotas),
             _frac_fmtnum(inv), _frac_fmtnum(val), _frac_fmtnum(cash_inv),
             _frac_colored(gan, signed=True), _frac_colored(rent, _frac_pct_str),
             _frac_colored(ta, _frac_pct_str), _frac_colored(tb, _frac_pct_str),
@@ -1088,10 +1291,10 @@ def _frac_show_todas_compras(data):
         val_total  += val  or 0
         gan_total  += gan  or 0
     rent_total = (gan_total / cash_total * 100) if cash_total > 0 else None
-    t.add_row(*[""] * 17)
+    t.add_row(*[""] * 18)
     t.add_section()
     t.add_row(
-        "[bold]TOTAL[/bold]", "", "", "", "", "", "", "",
+        "[bold]TOTAL[/bold]", "", "", "", "", "", "", "", "",
         f"[bold cyan]{_frac_fmtnum(inv_total)}[/bold cyan]",
         f"[bold green]{_frac_fmtnum(val_total)}[/bold green]",
         f"[bold yellow]{_frac_fmtnum(cash_total)}[/bold yellow]",
@@ -1109,6 +1312,127 @@ def _frac_show_todas_compras(data):
     _ley2.add_row("[dark_orange3]Vender rent. baja[/dark_orange3]",
                   f"activo no malo pero hold > {int(data.get('espera_max', 18))} meses")
     _console.print(_ley2)
+
+# ─── Fuera del portafolio ─────────────────────────────────────────────────────
+def _frac_show_fuera(conn):
+    """Propiedades ya fuera del portafolio (sold/refunded). Mismo formato que 'Todas las compras'."""
+    import datetime as _dt, re as _re
+
+    def _parse_dt(s):
+        if not s: return None
+        s = s.replace("Z", "+00:00")
+        s = _re.sub(r'(\.\d{1,5})(?=[+-]|$)', lambda m: m.group(1).ljust(7, '0'), s)
+        try:    return _dt.datetime.fromisoformat(s).date()
+        except: return _dt.date.fromisoformat(s[:10])
+
+    # Una fila por (purchase_confirmation_id, persona) — igual que Todas las compras
+    rows = conn.execute(f"""
+        WITH latest AS (
+            SELECT purchase_confirmation_id, persona, MAX(extracted_at) AS max_ts
+            FROM {_FRAC_TABLE}
+            WHERE status = 'sold'
+            GROUP BY purchase_confirmation_id, persona
+        )
+        SELECT
+            m.purchase_confirmation_id          AS pid,
+            m.persona, m.unit_id, m.unit_name,
+            m.confirmed_at,
+            m.amend_sold_at                     AS exit_at,
+            MAX(m.bid_preferred_amount_fee)     AS comision,
+            MAX(m.bid_preferred_amount) + MAX(m.bid_preferred_amount_fee) AS capital,
+            MAX(m.bid_amount)                   AS recibido
+        FROM {_FRAC_TABLE} m
+        JOIN latest l ON m.purchase_confirmation_id = l.purchase_confirmation_id
+                      AND m.persona = l.persona AND m.extracted_at = l.max_ts
+        WHERE m.status = 'sold' AND m.kind IN ('purchase','market')
+        GROUP BY m.purchase_confirmation_id, m.persona, m.unit_id, m.unit_name,
+                 m.status, m.confirmed_at, exit_at
+        ORDER BY exit_at DESC, m.unit_name, m.confirmed_at
+    """).fetchall()
+
+    if not rows:
+        _console.print("[dim]Sin propiedades fuera del portafolio.[/dim]")
+        return
+
+    _console.print("\n[bold orange1]Fuera del portafolio  (propiedades vendidas)[/bold orange1]\n")
+    t = Table(box=_FRAC_BOX, show_header=True, header_style="bold orange1")
+    t.add_column("Propiedad",            style="white", max_width=25, overflow="ellipsis", no_wrap=True)
+    t.add_column("ID",                   style="dim",   width=6, overflow="ellipsis")
+    t.add_column("P.",                   style="dim",   width=3)
+    t.add_column("Purchase ID",          style="dim",   max_width=14, overflow="ellipsis", no_wrap=True)
+    t.add_column("Salida",               style="dim",   width=10)
+    t.add_column("Fecha",                style="dim",   width=10)
+    t.add_column("Meses",                justify="right", style="dim", width=5)
+    t.add_column("Inversión\nnominal",   justify="right", style="cyan",   width=13)
+    t.add_column("Recibido",             justify="right", style="green",  width=13)
+    t.add_column("Ganancia",             justify="right", width=13)
+    t.add_column("Rentabilidad",         justify="right", width=12)
+    t.add_column("TIR A",                justify="right", width=7)
+    t.add_column("TIR B",                justify="right", width=7)
+    t.add_column("TIR C",                justify="right", width=7)
+    t.add_column("TIR D",                justify="right", width=7)
+
+    inv_total = recib_total = gan_total = 0.0
+    for r in rows:
+        capital  = r["capital"]  or 0.0
+        comision = r["comision"] or 0.0
+        sin_com  = capital - comision          # bid_preferred_amount
+        recibido = r["recibido"] or 0.0
+        ganancia = recibido - capital
+        rent_pct = (ganancia / capital * 100) if capital > 0 else None
+
+        confirmed = _parse_dt(r["confirmed_at"])
+        exit_dt   = _parse_dt(r["exit_at"])
+        if not confirmed or not exit_dt:
+            continue
+        meses = (exit_dt - confirmed).days / 30.4
+
+        def _tir(invest):
+            if invest <= 0 or recibido <= 0: return None
+            try:
+                v = _frac_xirr([-invest, recibido], [confirmed, exit_dt])
+                return (v * 100) if v is not None and -1 < v < 10 else None
+            except Exception:
+                return None
+
+        # A = con com contado · B = sin com contado · C = con com (≈A, cuotas ya pagadas) · D = sin com (≈B)
+        ta = _tir(capital)
+        tb = _tir(sin_com)
+        tc = ta   # cuotas ya pagadas al vender → mismo que contado
+        td = tb
+
+        pid = r["pid"]
+
+        def _t(v): return _frac_colored(v, _frac_pct_str) if v is not None else "[dim]—[/dim]"
+
+        t.add_row(
+            r["unit_name"], r["unit_id"], r["persona"],
+            pid[-14:] if len(pid) > 14 else pid,
+            str(exit_dt), str(confirmed),
+            _frac_fmt1f(meses),
+            _frac_fmtnum(capital),
+            _frac_fmtnum(recibido),
+            _frac_colored(ganancia, signed=True),
+            _t(rent_pct),
+            _t(ta), _t(tb), _t(tc), _t(td),
+        )
+        inv_total   += capital
+        recib_total += recibido
+        gan_total   += ganancia
+
+    rent_total = (gan_total / inv_total * 100) if inv_total > 0 else None
+    t.add_row(*[""] * 15)
+    t.add_section()
+    t.add_row(
+        "[bold]TOTAL[/bold]", "", "", "", "", "", "",
+        f"[bold cyan]{_frac_fmtnum(inv_total)}[/bold cyan]",
+        f"[bold green]{_frac_fmtnum(recib_total)}[/bold green]",
+        _frac_colored(gan_total, signed=True),
+        _frac_colored(rent_total, _frac_pct_str),
+        "", "", "", "",
+    )
+    _console.print(t)
+    _console.print("[dim]TIR A/B/C/D realizadas · A=con com · B=sin com · C≈A · D≈B (cuotas ya pagadas al salir)[/dim]")
 
 # ─── Menú de análisis ────────────────────────────────────────────────────────
 def _frac_menu_analisis(tasa_dap, premium, max_meses=12, espera_max=18):
@@ -1138,6 +1462,7 @@ def _frac_menu_analisis(tasa_dap, premium, max_meses=12, espera_max=18):
             choices=[
                 questionary.Choice("  Resumen de rentabilidad", value="resumen"),
                 questionary.Choice("  Recomendaciones",         value="recomendaciones"),
+                questionary.Choice("  Fuera del portafolio",    value="fuera"),
                 questionary.Separator(),
                 questionary.Choice("  « Volver",                value="back"),
             ],
@@ -1147,9 +1472,17 @@ def _frac_menu_analisis(tasa_dap, premium, max_meses=12, espera_max=18):
             return
         if sel == "resumen":
             _frac_sep()
-            _frac_show_portafolio(data)
-            _frac_show_por_propiedad(data)
+            conn_sold = _frac_db_conn()
+            sold_data = _frac_load_sold_data(conn_sold)
+            conn_sold.close()
+            _frac_show_por_propiedad(data, sold=sold_data)
             _console.print("\n[dim]TIR A = contado+com · TIR B = contado s/com · TIR C = cuotas+com · TIR D = cuotas s/com[/dim]")
+            input("\nEnter para volver al menú...")
+        elif sel == "fuera":
+            _frac_sep()
+            conn2 = _frac_db_conn()
+            _frac_show_fuera(conn2)
+            conn2.close()
             input("\nEnter para volver al menú...")
         elif sel == "recomendaciones":
             while True:
@@ -7724,15 +8057,40 @@ def scrape_global66_pj(context, resultados):
         # Intentar seleccionar "correo electrónico" como canal de envío
         _g66_select_email_channel(page)
 
-        # Esperar campos OTP (6 inputs tel)
-        page.wait_for_selector('input[type="tel"].gui-input', timeout=20000)
+        # Esperar campos OTP — probar selectores en orden (la clase cambió en actualizaciones del sitio)
+        _otp_sel = None
+        for _sel in ['input[type="tel"].gui-input__inner',
+                     'input[type="tel"].gui-input',
+                     'input[type="tel"]',
+                     'input[type="text"].gui-input__inner',
+                     'input[type="number"]']:
+            try:
+                page.wait_for_selector(_sel, timeout=8000)
+                _otp_sel = _sel
+                print(f"[G66] Selector OTP: {_sel}", flush=True)
+                break
+            except Exception:
+                pass
+        if not _otp_sel:
+            # Debug: volcar todos los inputs presentes en la pantalla MFA
+            try:
+                _inputs = page.evaluate("""() => Array.from(document.querySelectorAll('input')).map(el => ({
+                    type: el.type, class: el.className, name: el.name, id: el.id,
+                    placeholder: el.placeholder, visible: el.offsetParent !== null
+                }))""")
+                print(f"[G66-DEBUG] Inputs en pantalla MFA: {_inputs}", flush=True)
+                _url = page.url
+                print(f"[G66-DEBUG] URL actual: {_url}", flush=True)
+            except Exception as _de:
+                print(f"[G66-DEBUG] Error al hacer dump: {_de}", flush=True)
+            raise RuntimeError("[G66] No se encontró input OTP en pantalla MFA")
         page.wait_for_timeout(500)
 
         # Obtener OTP desde Gmail automáticamente
         otp_code = _get_g66_otp_from_gmail(after_dt=otp_request_time, timeout_s=90)
 
         # Llenar los 6 campos del OTP
-        otp_inputs = page.locator('input[type="tel"].gui-input')
+        otp_inputs = page.locator(_otp_sel)
         for i, digit in enumerate(otp_code[:6]):
             otp_inputs.nth(i).click()
             page.wait_for_timeout(80)
@@ -11940,10 +12298,17 @@ def _sco_pn_content_frame(page, keywords, timeout_ms=45000):
         page.wait_for_load_state("load", timeout=12000)
     except Exception:
         pass
+    # Pausa inicial: da tiempo al frame de la navegación anterior de ser descartado
+    # antes de buscar el nuevo contenido (crítico al procesar múltiples tarjetas secuencialmente).
+    page.wait_for_timeout(1500)
     deadline = time.time() + timeout_ms / 1000
     while time.time() < deadline:
         for f in page.frames:
             try:
+                # Ignorar frames que no pertenecen al dominio de Scotiabank
+                frame_url = f.url or ""
+                if frame_url and "scotiabank" not in frame_url and frame_url not in ("about:blank", ""):
+                    continue
                 text = f.evaluate("() => document.body?.innerText || ''")
                 if len(text) > 150 and any(kw in text for kw in keywords):
                     return f
@@ -12020,11 +12385,19 @@ def _scrape_sco_pagos_card(page, card_number, max_retries=3):
                 const i = lines.findIndex(l => l.includes(partial));
                 return i !== -1 ? lines[i + 1] : null;
             };
+            // facturado_clp: buscar "Monto nacional", "Nacional ($)", "Nacional" o "Monto facturado"
+            // Si la tarjeta no tiene gastos internacionales el DOM puede omitir la sección Internacional
+            // y el label "Nacional" puede no existir — usar múltiples fallbacks.
+            const fac_clp = after('Monto nacional') || after('Nacional ($)') ||
+                            after('Nacional') || after('Monto facturado');
+            // facturado_usd: "Internacional" puede no existir para tarjetas sin movimientos USD
+            const fac_usd = after('Monto internacional') || after('Internacional ($)') ||
+                            after('Internacional');
             return {
                 periodo_hasta: after('Período hasta') || after('Periodo hasta'),
                 pagar_hasta:   after('Pagar hasta'),
-                facturado_clp: after('Nacional'),
-                facturado_usd: after('Internacional'),
+                facturado_clp: fac_clp,
+                facturado_usd: fac_usd,
             };
         }""")
 
@@ -12046,7 +12419,7 @@ def _scrape_sco_pagos_card(page, card_number, max_retries=3):
             };
             const isPagoKeyword = s => {
                 const low = s.toLowerCase();
-                if (/otrospagos/i.test(low)) return false; // compra en otrospagos.com, no pago
+                if (/otrospagos/i.test(low)) return false;
                 return /\\bpago\\b|abono|canje|devoluci.n|nota de cr.dito|nota de credito/i.test(low);
             };
             const isAggregate = s => /movimiento (nacional|internacional) por facturar/i.test(s);
@@ -12054,16 +12427,29 @@ def _scrape_sco_pagos_card(page, card_number, max_retries=3):
                 const hdrs = Array.from(tbl.querySelectorAll('th'))
                     .map(h => h.innerText.trim().toUpperCase());
                 if (!hdrs.some(h => h.includes('FECHA') || h.includes('MONTO'))) return;
+                // Contar ocurrencias dentro de ESTA tabla para detectar filas duplicadas legítimas
+                // (ej: 2 pagos de $2M el mismo día son 2 filas distintas en la misma tabla)
+                const tableCount = {};
+                const tableCells = [];
                 tbl.querySelectorAll('tbody tr').forEach(r => {
-                    const cells = Array.from(r.querySelectorAll('td'))
-                        .map(c => c.innerText.trim());
+                    const cells = Array.from(r.querySelectorAll('td')).map(c => c.innerText.trim());
                     const k = JSON.stringify(cells);
-                    if (!seenAll.has(k)) { seenAll.add(k); allRows.push(cells); }
-                    if (cells.some(isAggregate)) return;
+                    tableCount[k] = (tableCount[k] || 0) + 1;
+                    tableCells.push({cells, k});
+                });
+                // Procesar con clave (contenido + nro. de ocurrencia en esta tabla)
+                // → filas duplicadas en tablas distintas no se cuentan dos veces
+                // → filas duplicadas en la MISMA tabla (pagos reales) sí se cuentan
+                const tableOccurrence = {};
+                tableCells.forEach(({cells, k}) => {
+                    tableOccurrence[k] = (tableOccurrence[k] || 0) + 1;
+                    const oKey = k + '\\x00' + tableOccurrence[k];
+                    if (!seenAll.has(oKey)) { seenAll.add(oKey); allRows.push(cells); }
+                    if (cells.some(isAggregate) && !cells.some(isNegMoney)) return;
                     const hasNeg  = cells.some(isNegMoney);
                     const hasPago = cells.some(isPagoKeyword);
                     if (!hasNeg && !hasPago) return;
-                    if (!seen.has(k)) { seen.add(k); result.push(cells); }
+                    if (!seen.has(oKey)) { seen.add(oKey); result.push(cells); }
                 });
             });
             return { pago: result, all: allRows };
@@ -12092,7 +12478,7 @@ def _scrape_sco_pagos_card(page, card_number, max_retries=3):
                     const cells = Array.from(r.querySelectorAll('td'))
                         .map(c => c.innerText.trim());
                     if (cells.length < 4) return;
-                    if (cells.some(isAggregate)) return;
+                    if (cells.some(isAggregate) && !cells.some(isNegMoney)) return;
                     if (!cells.some(isNegMoney) && !cells.some(isPagoKeyword)) return;
                     const k = JSON.stringify(cells);
                     if (!seen.has(k)) { seen.add(k); result.push(cells); }
@@ -12122,7 +12508,15 @@ def _scrape_sco_pagos_card(page, card_number, max_retries=3):
 
             # ── Facturados ────────────────────────────────────────────────
             page.goto(f"{BASE}/?tab=movimientos-facturados&card={card_number}")
+            page.wait_for_timeout(1500)  # espera extra para flush de SPA entre tarjetas
             frame = _sco_pn_content_frame(page, ["Monto facturado", "Período hasta", "Pagar hasta"])
+            # Verificar que el frame pertenece a esta tarjeta (evita contenido cacheado de la anterior)
+            frame_text = frame.evaluate("() => document.body?.innerText || ''")
+            if card_number not in frame_text:
+                # El SPA puede mostrar el número de tarjeta como "•••• XXXX" o solo los últimos 4 dígitos
+                # Intentar esperar un poco más y re-obtener frame
+                page.wait_for_timeout(3000)
+                frame = _sco_pn_content_frame(page, ["Monto facturado", "Período hasta", "Pagar hasta"])
             _sco_click_ver_mas(frame, page)
             header = _extract_header(frame)
 
@@ -12131,6 +12525,7 @@ def _scrape_sco_pagos_card(page, card_number, max_retries=3):
 
             # ── No-Facturados ─────────────────────────────────────────────
             page.goto(f"{BASE}/?tab=movimientos-no-facturados&card={card_number}")
+            page.wait_for_timeout(1500)  # espera extra para flush de SPA entre tarjetas
             frame = _sco_pn_content_frame(
                 page, ["Nacionales", "No facturado", "movimientos no facturados", "Próxima fecha"]
             )
@@ -12142,30 +12537,44 @@ def _scrape_sco_pagos_card(page, card_number, max_retries=3):
             pago_nofac       = nofac_result.get("pago", []) if isinstance(nofac_result, dict) else nofac_result
             pagado_clp_nofac = sum(parse_clp(_last_money_col(r)) for r in pago_nofac)
 
-            if DEBUG:
-                pago_keys = {tuple(r) for r in pago_nofac}
-                print(f"[SCO-PAGOS] TdC {card_number} — no-fac rows={len(all_nofac)}, pagos={len(pago_nofac)}, total={pagado_clp_nofac:,.0f}", flush=True)
+            if os.environ.get("DEBUG"):
+                pago_keys = {json.dumps(r) for r in pago_nofac}
+                print(f"[SCO-PAGOS] TdC {card_number} — {len(all_nofac)} filas no-facturadas:", flush=True)
+                for _r in all_nofac:
+                    _es_pago = json.dumps(_r) in pago_keys
+                    _monto   = _last_money_col(_r)
+                    _desc    = " | ".join(_r)[:80]
+                    print(f"  {'✅ PAGO' if _es_pago else '❌ compra':10s}  {_monto:>14}  {_desc}", flush=True)
+            print(f"[SCO-PAGOS] TdC {card_number} — pagos={len(pago_nofac)}, total_pag={pagado_clp_nofac:,.0f}", flush=True)
 
             # Pagos USD en no-facturados — click tab Internacionales
+            # (puede no existir para tarjetas sin movimientos internacionales)
             neg_intl_nofac = []
             try:
-                txt_before = frame.evaluate("() => document.body?.innerText || ''")
-                frame.evaluate("""() => {
-                    const t = Array.from(document.querySelectorAll('li.tab__item, button, a'))
+                tab_exists = frame.evaluate("""() => {
+                    return !!Array.from(document.querySelectorAll('li.tab__item, button, a'))
                         .find(el => el.innerText?.trim() === 'Internacionales');
-                    if (t) t.click();
                 }""")
-                dl = _time.time() + 12
-                while _time.time() < dl:
-                    txt_now = frame.evaluate("() => document.body?.innerText || ''")
-                    if txt_now != txt_before and len(txt_now) > 100:
-                        break
-                    page.wait_for_timeout(500)
-                page.wait_for_timeout(800)
-                _sco_click_ver_mas(frame, page)
-                neg_intl_nofac = _extract_neg_intl(frame)
+                if tab_exists:
+                    txt_before = frame.evaluate("() => document.body?.innerText || ''")
+                    frame.evaluate("""() => {
+                        const t = Array.from(document.querySelectorAll('li.tab__item, button, a'))
+                            .find(el => el.innerText?.trim() === 'Internacionales');
+                        if (t) t.click();
+                    }""")
+                    dl = _time.time() + 8  # reducido de 12 a 8s — si no cambia en 8s el tab no existe
+                    while _time.time() < dl:
+                        txt_now = frame.evaluate("() => document.body?.innerText || ''")
+                        if txt_now != txt_before and len(txt_now) > 100:
+                            break
+                        page.wait_for_timeout(500)
+                    page.wait_for_timeout(800)
+                    _sco_click_ver_mas(frame, page)
+                    neg_intl_nofac = _extract_neg_intl(frame)
+                else:
+                    print(f"[SCO-PAGOS] TdC {card_number} — sin tab Internacionales (solo nacional)", flush=True)
             except Exception as e_intl:
-                if DEBUG: print(f"[SCO-PAGOS] TdC {card_number} — intl no-facturados: {e_intl}", flush=True)
+                print(f"[SCO-PAGOS] TdC {card_number} — intl no-facturados: {e_intl}", flush=True)
 
             pagado_clp = pagado_clp_nofac
             pagado_usd = sum(parse_usd(_last_money_col(r)) for r in neg_intl_nofac)
